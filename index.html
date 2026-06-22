@@ -70,6 +70,7 @@
       <div id="treemap-wrap">
         <div class="state" id="tree-state"><div class="spinner"></div>Wczytuję dane budżetu…</div>
         <svg id="treemap" role="img" aria-label="Mapa wydatków budżetu — pola proporcjonalne do kwot"></svg>
+        <div id="tree-rest" aria-label="Lista wydatków"></div>
       </div>
       <div class="legend" id="legend"></div>
       <p class="hint"><i class="ti ti-pointer" aria-hidden="true"></i> Kliknij pole, aby wejść w szczegóły. Kliknij ścieżkę powyżej, aby wrócić.</p>
@@ -77,7 +78,7 @@
 
     <!-- SANKEY -->
     <div class="panel" id="panel-flow" role="tabpanel" aria-labelledby="tab-flow" hidden>
-      <p style="color:var(--ink-soft); max-width:62ch; margin:0 0 8px;">Skąd pochodzą pieniądze i dokąd płyną. Po lewej źródła dochodów, po prawej największe obszary wydatków. Czerwony strumień to deficyt — wydatki niepokryte dochodami.</p>
+      <p style="color:var(--ink-soft); max-width:62ch; margin:0 0 8px;">Skąd pochodzą pieniądze i dokąd płyną. Źródła dochodów łączą się w budżet, z którego finansowane są największe obszary wydatków. Czerwony strumień to deficyt — wydatki niepokryte dochodami.</p>
       <div id="sankey-wrap">
         <svg id="sankey" role="img" aria-label="Diagram przepływu: dochody budżetu do kategorii wydatków"></svg>
       </div>

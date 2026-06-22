@@ -12,6 +12,11 @@
   var fmtPL = new Intl.NumberFormat("pl-PL");
   var tooltip = document.getElementById("tooltip");
 
+  var MOBILE_Q = window.matchMedia("(max-width: 760px)");
+  function isMobile() { return MOBILE_Q.matches; }
+  var MOBILE_TOP = 12;        // tiles shown before grouping into "Pozostałe"
+  var restExpanded = false;   // mobile: is the "Pozostałe" list expanded?
+
   // ---- category color assignment (by dział/część theme) ----
   function colorKey(name) {
     var n = (name || "").toLowerCase();
@@ -136,15 +141,25 @@
     return [];
   }
 
-  // ---------- treemap ----------
+  // ---------- treemap (dispatcher) ----------
   function drawTree() {
     var state = document.getElementById("tree-state");
     if (state) state.style.display = "none";
-
     renderCrumbs();
 
     var nodes = currentNodes().filter(function (n) { return n.value > 0; });
     nodes.sort(function (a, b) { return b.value - a.value; });
+
+    if (isMobile()) drawTreeMobile(nodes);
+    else drawTreeDesktop(nodes);
+  }
+
+  // ---------- treemap: desktop (full D3 treemap) ----------
+  function drawTreeDesktop(nodes) {
+    var list = document.getElementById("tree-rest");
+    if (list) list.innerHTML = "";
+    var svgEl = document.getElementById("treemap");
+    svgEl.style.display = "block";
 
     var wrap = document.getElementById("treemap-wrap");
     var W = wrap.clientWidth || 1000;
@@ -173,25 +188,21 @@
       .attr("stroke", function (d) { return cssVar(CMAP[colorKey(d.data.name)].line); })
       .attr("stroke-width", 1);
 
-    // labels (only if box big enough)
     g.each(function (d) {
       var w = d.x1 - d.x0, h = d.y1 - d.y0;
       var sel = d3.select(this);
       var ink = cssVar(CMAP[colorKey(d.data.name)].ink);
       if (w < 54 || h < 30) return;
       var pad = 9;
-      var name = d.data.name;
       var maxChars = Math.floor((w - pad * 2) / 7);
-      var lines = wrapText(name, maxChars, h > 78 ? 3 : (h > 52 ? 2 : 1));
+      var lines = wrapText(d.data.name, maxChars, h > 78 ? 3 : (h > 52 ? 2 : 1));
       var ty = pad + 13;
       lines.forEach(function (ln) {
-        sel.append("text").attr("class", "tile-label").attr("x", pad).attr("y", ty)
-          .attr("fill", ink).text(ln);
+        sel.append("text").attr("class", "tile-label").attr("x", pad).attr("y", ty).attr("fill", ink).text(ln);
         ty += 15;
       });
       if (h > 46) {
-        sel.append("text").attr("class", "tile-value").attr("x", pad).attr("y", h - 10)
-          .attr("fill", ink).text(moneyShort(d.data.value));
+        sel.append("text").attr("class", "tile-value").attr("x", pad).attr("y", h - 10).attr("fill", ink).text(moneyShort(d.data.value));
         if (w > 96 && h > 64) {
           sel.append("text").attr("class", "tile-sub").attr("x", pad).attr("y", h - 26)
             .attr("fill", ink).attr("opacity", 0.7)
@@ -200,19 +211,92 @@
       }
     });
 
-    // interactions
     g.on("mousemove", function (ev, d) { showTip(ev, d.data, total); })
       .on("mouseleave", hideTip)
       .on("click", function (ev, d) { onTileClick(d.data); })
       .style("cursor", function (d) { return canDrill(d.data) ? "pointer" : "default"; })
-      .attr("tabindex", 0)
-      .attr("role", "button")
+      .attr("tabindex", 0).attr("role", "button")
       .attr("aria-label", function (d) {
         return d.data.name + ", " + money(d.data.value) + (canDrill(d.data) ? ", kliknij aby wejść w szczegóły" : "");
       })
       .on("keydown", function (ev, d) {
         if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onTileClick(d.data); }
       });
+  }
+
+  // ---------- treemap: mobile (top-N tiles + "Pozostałe" bar list) ----------
+  function drawTreeMobile(nodes) {
+    document.getElementById("treemap").style.display = "none";
+    var host = document.getElementById("tree-rest");
+    host.innerHTML = "";
+
+    var total = d3.sum(nodes, function (d) { return d.value; });
+    var max = nodes.length ? nodes[0].value : 1;
+
+    var showAll = nodes.length <= MOBILE_TOP + 1;
+    var headN = showAll ? nodes.length : MOBILE_TOP;
+    var head = nodes.slice(0, headN);
+    var tail = showAll ? [] : nodes.slice(headN);
+    var tailSum = d3.sum(tail, function (d) { return d.value; });
+
+    function bar(d) {
+      var c = CMAP[colorKey(d.name)];
+      var w = Math.max(2, d.value / max * 100);
+      var pct = (d.value / total * 100).toFixed(1).replace(".", ",");
+      var drill = canDrill(d);
+      var el = document.createElement(drill ? "button" : "div");
+      el.className = "mbar" + (drill ? " is-drill" : "");
+      el.innerHTML =
+        '<span class="mbar-head">' +
+          '<span class="mbar-name">' + escapeHtml(d.name) + (drill ? ' <i class="ti ti-chevron-right" aria-hidden="true"></i>' : '') + '</span>' +
+          '<span class="mbar-amt">' + moneyShort(d.value) + '</span>' +
+        '</span>' +
+        '<span class="mbar-track"><span class="mbar-fill" style="width:' + w.toFixed(1) + '%;background:' + c.fill + ';border:1px solid ' + c.line + '"></span></span>' +
+        '<span class="mbar-pct">' + pct + '%</span>';
+      if (drill) {
+        el.setAttribute("aria-label", d.name + ", " + money(d.value) + ", dotknij aby wejść w szczegóły");
+        el.addEventListener("click", function () { onTileClick(d); });
+      }
+      return el;
+    }
+
+    head.forEach(function (d) { host.appendChild(bar(d)); });
+
+    if (tail.length) {
+      var toggle = document.createElement("button");
+      toggle.className = "mbar mbar-rest";
+      var pct = (tailSum / total * 100).toFixed(1).replace(".", ",");
+      function renderToggle() {
+        toggle.innerHTML =
+          '<span class="mbar-head">' +
+            '<span class="mbar-name"><i class="ti ti-' + (restExpanded ? "chevron-down" : "dots") + '" aria-hidden="true"></i> ' +
+            (restExpanded ? "Zwiń" : "Pozostałe (" + tail.length + ")") + '</span>' +
+            '<span class="mbar-amt">' + moneyShort(tailSum) + '</span>' +
+          '</span>' +
+          '<span class="mbar-track"><span class="mbar-fill" style="width:' + Math.max(2, tailSum / max * 100).toFixed(1) + '%;background:var(--c-other);border:1px solid var(--c-other-line)"></span></span>' +
+          '<span class="mbar-pct">' + pct + '%</span>';
+      }
+      renderToggle();
+      toggle.setAttribute("aria-expanded", restExpanded ? "true" : "false");
+      toggle.addEventListener("click", function () {
+        restExpanded = !restExpanded;
+        toggle.setAttribute("aria-expanded", restExpanded ? "true" : "false");
+        renderToggle();
+        var existing = host.querySelectorAll(".mbar-tail");
+        existing.forEach(function (n) { n.remove(); });
+        if (restExpanded) {
+          tail.forEach(function (d) {
+            var b = bar(d);
+            b.classList.add("mbar-tail");
+            host.appendChild(b);
+          });
+        }
+      });
+      host.appendChild(toggle);
+      if (restExpanded) {
+        tail.forEach(function (d) { var b = bar(d); b.classList.add("mbar-tail"); host.appendChild(b); });
+      }
+    }
   }
 
   function canDrill(d) {
@@ -222,6 +306,7 @@
 
   function onTileClick(d) {
     if (!canDrill(d)) return;
+    restExpanded = false;
     if (path.length === 0) {
       path.push({ level: "czesc", name: d.name, code: d.code, ref: d.ref });
     } else if (path[path.length - 1].level === "czesc") {
@@ -243,6 +328,7 @@
     el.querySelectorAll(".crumb").forEach(function (b) {
       b.addEventListener("click", function () {
         var i = parseInt(b.getAttribute("data-i"), 10);
+        restExpanded = false;
         path = i < 0 ? [] : path.slice(0, i + 1);
         drawTree();
       });
@@ -268,81 +354,96 @@
   }
   function hideTip() { tooltip.style.opacity = "0"; }
 
-  // ---------- sankey ----------
-  function drawSankey() {
-    var wrap = document.getElementById("sankey-wrap");
-    var W = wrap.clientWidth || 1000;
-    var H = Math.max(460, Math.min(640, W * 0.6));
-    var svg = d3.select("#sankey").attr("viewBox", "0 0 " + W + " " + H).attr("width", "100%").attr("height", H);
-    svg.selectAll("*").remove();
-
-    // Build nodes: revenue sources -> "Budżet" hub -> top expenditure działy (+ deficit)
-    var topN = 9;
+  // ---------- sankey (dispatcher) ----------
+  function buildSankeyGraph(opts) {
+    opts = opts || {};
+    var topN = opts.topN || 9;
+    var mergeRev = !!opts.mergeRev;
     var dz = DATA.dzialy.slice().sort(function (a, b) { return b.plan - a.plan; });
     var top = dz.slice(0, topN);
     var rest = dz.slice(topN);
     var restSum = d3.sum(rest, function (d) { return d.plan; });
 
-    var nodes = [];
-    var nodeIndex = {};
+    var nodes = [], nodeIndex = {};
     function addNode(name, kind) {
       if (nodeIndex[name] != null) return nodeIndex[name];
       nodeIndex[name] = nodes.length;
       nodes.push({ name: name, kind: kind });
       return nodeIndex[name];
     }
-
     var HUB = "Budżet państwa";
     addNode(HUB, "hub");
-    DATA.dochody.forEach(function (r) { addNode(r.name, "rev"); });
+
+    // revenue — optionally merge the smaller sources into "Inne podatki"
+    var dochody = DATA.dochody.slice();
+    var revLinks = [];
+    if (mergeRev) {
+      var keep = dochody.filter(function (r) { return /VAT|Akcyza/.test(r.name); });
+      var mergedSum = d3.sum(dochody.filter(function (r) { return !/VAT|Akcyza/.test(r.name); }), function (r) { return r.plan; });
+      keep.forEach(function (r) { addNode(r.name, "rev"); revLinks.push({ name: r.name, value: r.plan }); });
+      addNode("Inne podatki", "rev"); revLinks.push({ name: "Inne podatki", value: mergedSum });
+    } else {
+      dochody.forEach(function (r) { addNode(r.name, "rev"); revLinks.push({ name: r.name, value: r.plan }); });
+    }
     addNode("Deficyt (dług)", "rev");
+
     top.forEach(function (d) { addNode(d.name, "exp"); });
     if (restSum > 0) addNode("Pozostałe działy", "exp");
 
     var links = [];
-    DATA.dochody.forEach(function (r) { links.push({ source: nodeIndex[r.name], target: nodeIndex[HUB], value: r.plan }); });
+    revLinks.forEach(function (r) { links.push({ source: nodeIndex[r.name], target: nodeIndex[HUB], value: r.value }); });
     links.push({ source: nodeIndex["Deficyt (dług)"], target: nodeIndex[HUB], value: DATA.meta.deficyt });
     top.forEach(function (d) { links.push({ source: nodeIndex[HUB], target: nodeIndex[d.name], value: d.plan }); });
     if (restSum > 0) links.push({ source: nodeIndex[HUB], target: nodeIndex["Pozostałe działy"], value: restSum });
+    return { nodes: nodes, links: links, HUB: HUB };
+  }
 
-    var sankey = d3.sankey()
-      .nodeWidth(14).nodePadding(13)
-      .extent([[4, 10], [W - 4, H - 10]]);
+  function sankeyNodeColor(n) {
+    if (n.kind === "hub") return cssVar("var(--accent)");
+    if (n.name === "Deficyt (dług)") return cssVar("var(--danger)");
+    if (n.kind === "rev") return cssVar("var(--c-transfer-line)");
+    return cssVar(CMAP[colorKey(n.name)].line);
+  }
+
+  function drawSankey() {
+    if (isMobile()) drawSankeyMobile();
+    else drawSankeyDesktop();
+  }
+
+  // ---------- sankey: desktop (horizontal) ----------
+  function drawSankeyDesktop() {
+    var wrap = document.getElementById("sankey-wrap");
+    var W = wrap.clientWidth || 1000;
+    var H = Math.max(460, Math.min(640, W * 0.6));
+    var svg = d3.select("#sankey").attr("viewBox", "0 0 " + W + " " + H).attr("width", "100%").attr("height", H);
+    svg.selectAll("*").remove();
+
+    var g = buildSankeyGraph();
+    var sankey = d3.sankey().nodeWidth(14).nodePadding(13).extent([[4, 10], [W - 4, H - 10]]);
     var graph = sankey({
-      nodes: nodes.map(function (d) { return Object.assign({}, d); }),
-      links: links.map(function (d) { return Object.assign({}, d); })
+      nodes: g.nodes.map(function (d) { return Object.assign({}, d); }),
+      links: g.links.map(function (d) { return Object.assign({}, d); })
     });
 
-    function nodeColor(n) {
-      if (n.kind === "hub") return cssVar("var(--accent)");
-      if (n.name === "Deficyt (dług)") return cssVar("var(--danger)");
-      if (n.kind === "rev") return cssVar("var(--c-transfer-line)");
-      return cssVar(CMAP[colorKey(n.name)].line);
-    }
-
-    // links
     svg.append("g").attr("fill", "none")
       .selectAll("path").data(graph.links).enter().append("path")
-      .attr("class", "slink")
-      .attr("d", d3.sankeyLinkHorizontal())
+      .attr("class", "slink").attr("d", d3.sankeyLinkHorizontal())
       .attr("stroke", function (d) {
-        return d.source.name === "Deficyt (dług)" ? cssVar("var(--danger)") : nodeColor(d.target.kind === "exp" ? d.target : d.source);
+        return d.source.name === "Deficyt (dług)" ? cssVar("var(--danger)") : sankeyNodeColor(d.target.kind === "exp" ? d.target : d.source);
       })
       .attr("stroke-opacity", 0.3)
       .attr("stroke-width", function (d) { return Math.max(1, d.width); })
       .append("title").text(function (d) { return d.source.name + " → " + d.target.name + "\n" + money(d.value); });
 
-    // nodes
     var node = svg.append("g").selectAll("g").data(graph.nodes).enter().append("g").attr("class", "snode");
     node.append("rect")
       .attr("x", function (d) { return d.x0; }).attr("y", function (d) { return d.y0; })
       .attr("width", function (d) { return d.x1 - d.x0; })
       .attr("height", function (d) { return Math.max(1, d.y1 - d.y0); })
-      .attr("fill", nodeColor).attr("rx", 2)
+      .attr("fill", sankeyNodeColor).attr("rx", 2)
       .append("title").text(function (d) { return d.name + "\n" + money(d.value); });
 
-    node.append("text")
-      .attr("class", "slabel")
+    node.append("text").attr("class", "slabel")
       .attr("x", function (d) { return d.x0 < W / 2 ? d.x1 + 7 : d.x0 - 7; })
       .attr("y", function (d) { return (d.y0 + d.y1) / 2; })
       .attr("dy", "0.32em")
@@ -350,15 +451,122 @@
       .attr("fill", cssVar("var(--ink)"))
       .text(function (d) { return d.name; })
       .each(function (d) {
-        // append value on a second line
-        var t = d3.select(this);
-        t.append("tspan").attr("class", "svalue")
-          .attr("x", d.x0 < W / 2 ? d.x1 + 7 : d.x0 - 7)
-          .attr("dy", "1.25em")
+        d3.select(this).append("tspan").attr("class", "svalue")
+          .attr("x", d.x0 < W / 2 ? d.x1 + 7 : d.x0 - 7).attr("dy", "1.25em")
           .attr("text-anchor", d.x0 < W / 2 ? "start" : "end")
-          .attr("fill", cssVar("var(--ink-faint)"))
-          .text(moneyShort(d.value));
+          .attr("fill", cssVar("var(--ink-faint)")).text(moneyShort(d.value));
       });
+  }
+
+  // ---------- sankey: mobile (vertical, transposed) ----------
+  function drawSankeyMobile() {
+    var wrap = document.getElementById("sankey-wrap");
+    var W = wrap.clientWidth || 360;
+    var RIGHT_PAD = 70; // room for rotated expenditure labels extending right/down
+    // compute layout in a transposed frame: layout width = visual height, layout height = visual width
+    var LW = Math.max(520, Math.min(900, W * 2.0)); // becomes vertical extent
+    var LH = W - 8;                                   // becomes horizontal extent (node spread)
+    var g = buildSankeyGraph({ topN: 6, mergeRev: true });
+    // extra top room for staggered revenue labels, bottom room for rotated expenditure labels
+    var sankey = d3.sankey().nodeWidth(12).nodePadding(16).extent([[6, 56], [LW - 130, LH - 6]]);
+    var graph = sankey({
+      nodes: g.nodes.map(function (d) { return Object.assign({}, d); }),
+      links: g.links.map(function (d) { return Object.assign({}, d); })
+    });
+
+    var H = LW; // visual height = layout width
+    var svg = d3.select("#sankey").attr("viewBox", "0 0 " + (W + RIGHT_PAD) + " " + H).attr("width", "100%").attr("height", H * (W / (W + RIGHT_PAD)));
+    svg.selectAll("*").remove();
+
+    // transpose helper: layout (x,y) -> visual (y, x)
+    function tx(d) { return d.y0; }              // visual x = layout y
+    function ty(d) { return d.x0; }              // visual y = layout x
+
+    // vertical link path: connect bottom of source to top of target using cubic in Y
+    function vlink(d) {
+      var sx = (d.source.y0 + d.source.y1) / 2;   // visual x center of source
+      var tx2 = (d.target.y0 + d.target.y1) / 2;  // visual x center of target
+      var sy = d.source.x1;                        // visual y = bottom edge of source (layout x1)
+      var tyy = d.target.x0;                       // visual y = top edge of target
+      // offset by link position within node for ribbon effect
+      var sOff = (d.y0 - (d.source.y0 + d.source.y1) / 2);
+      var tOff = (d.y1 - (d.target.y0 + d.target.y1) / 2);
+      var x0 = sx + sOff, x1 = tx2 + tOff;
+      var ym = (sy + tyy) / 2;
+      return "M" + x0 + "," + sy + "C" + x0 + "," + ym + " " + x1 + "," + ym + " " + x1 + "," + tyy;
+    }
+
+    svg.append("g").attr("fill", "none")
+      .selectAll("path").data(graph.links).enter().append("path")
+      .attr("class", "slink").attr("d", vlink)
+      .attr("stroke", function (d) {
+        return d.source.name === "Deficyt (dług)" ? cssVar("var(--danger)") : sankeyNodeColor(d.target.kind === "exp" ? d.target : d.source);
+      })
+      .attr("stroke-opacity", 0.32)
+      .attr("stroke-width", function (d) { return Math.max(1.5, d.width); })
+      .append("title").text(function (d) { return d.source.name + " → " + d.target.name + "\n" + money(d.value); });
+
+    var node = svg.append("g").selectAll("g").data(graph.nodes).enter().append("g").attr("class", "snode");
+    node.append("rect")
+      .attr("x", function (d) { return d.y0; })                       // visual x = layout y
+      .attr("y", function (d) { return d.x0; })                       // visual y = layout x
+      .attr("width", function (d) { return Math.max(1, d.y1 - d.y0); })
+      .attr("height", function (d) { return d.x1 - d.x0; })
+      .attr("fill", sankeyNodeColor).attr("rx", 2)
+      .append("title").text(function (d) { return d.name + "\n" + money(d.value); });
+
+    // labels: rev at top (staggered to avoid collisions), exp at bottom (rotated), hub centered
+    var revSeq = 0;
+    node.each(function (d) {
+      var sel = d3.select(this);
+      var cx = (d.y0 + d.y1) / 2;
+      if (d.kind === "hub") {
+        sel.append("text").attr("class", "slabel")
+          .attr("x", cx).attr("y", (d.x0 + d.x1) / 2 + 4).attr("text-anchor", "middle")
+          .attr("fill", cssVar("var(--ink)")).style("font-size", "12px").style("font-weight", "500")
+          .text(shortLabel(d.name) + " · " + moneyShort(d.value));
+        return;
+      }
+      if (d.kind === "rev") {
+        // stagger across two fixed rows near the top so names never clip
+        var row = (revSeq++ % 2);
+        var yName = 14 + row * 22;
+        var t = sel.append("text").attr("class", "slabel")
+          .attr("x", cx).attr("y", yName).attr("text-anchor", "middle")
+          .attr("fill", cssVar("var(--ink)")).style("font-size", "10px")
+          .text(shortLabel(d.name));
+        t.append("tspan").attr("x", cx).attr("dy", "1.05em")
+          .attr("class", "svalue").attr("fill", cssVar("var(--ink-faint)"))
+          .style("font-size", "9px").text(moneyShort(d.value));
+        return;
+      }
+      // exp — below node, rotated to read vertically (prevents horizontal collisions)
+      var yB = d.x1 + 8;
+      var gx = sel.append("g").attr("transform", "translate(" + cx + "," + yB + ") rotate(40)");
+      gx.append("text").attr("class", "slabel")
+        .attr("x", 0).attr("y", 0).attr("text-anchor", "start")
+        .attr("fill", cssVar("var(--ink)")).style("font-size", "10px")
+        .text(shortLabel(d.name) + " · " + moneyShort(d.value));
+    });
+  }
+
+  function shortLabel(name) {
+    var map = {
+      "Obowiązkowe ubezpieczenia społeczne": "Ubezp. społ.",
+      "Różne rozliczenia": "Różne rozlicz.",
+      "Obrona narodowa": "Obrona",
+      "Obsługa długu publicznego": "Obsługa długu",
+      "Ochrona zdrowia": "Zdrowie",
+      "Szkolnictwo wyższe i nauka": "Szkoln. wyższe",
+      "Bezpieczeństwo publiczne i ochrona ppoż.": "Bezpieczeństwo",
+      "Administracja publiczna": "Administracja",
+      "Pozostałe działy": "Pozostałe",
+      "Inne dochody podatkowe i niepodatkowe": "Inne dochody",
+      "Inne podatki": "Inne podatki",
+      "Deficyt (dług)": "Deficyt",
+      "Budżet państwa": "Budżet"
+    };
+    return map[name] || name;
   }
 
   // ---------- type breakdown ----------
@@ -423,6 +631,7 @@
     if (axis === a) return;
     axis = a;
     path = [];
+    restExpanded = false;
     document.getElementById("axis-dzialy").setAttribute("aria-pressed", a === "dzialy" ? "true" : "false");
     document.getElementById("axis-czesci").setAttribute("aria-pressed", a === "czesci" ? "true" : "false");
     drawTree();
@@ -431,7 +640,18 @@
   function onResize() {
     if (view === "tree") drawTree();
     else if (view === "flow") drawSankey();
+    else if (view === "type") drawTypes();
   }
+
+  // redraw active view immediately when crossing the mobile/desktop breakpoint
+  (function wireBreakpoint() {
+    var handler = function () {
+      restExpanded = false;
+      onResize();
+    };
+    if (MOBILE_Q.addEventListener) MOBILE_Q.addEventListener("change", handler);
+    else if (MOBILE_Q.addListener) MOBILE_Q.addListener(handler);
+  })();
 
   // ---------- helpers ----------
   function wrapText(str, maxChars, maxLines) {
