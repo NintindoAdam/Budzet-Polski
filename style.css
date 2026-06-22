@@ -99,16 +99,10 @@ button.mbar:active { border-color: var(--line-strong); background: var(--bg); tr
   gap: 16px; padding-top: 18px; padding-bottom: 18px; flex-wrap: wrap;
 }
 .brand { display: flex; align-items: baseline; gap: 12px; }
-.brand-logo-link {
-  display: inline-flex; align-items: center; padding: 2px 0;
-  transition: opacity var(--dur-ui) var(--ease-out);
-}
-.brand-logo-link:active { opacity: 0.7; }
-@media (hover: hover) and (pointer: fine) { .brand-logo-link:hover { opacity: 0.78; } }
 .brand-logo {
-  height: 34px; width: auto; display: block; max-width: min(62vw, 230px);
+  height: 56px; width: auto; display: block; max-width: min(72vw, 360px);
 }
-@media (max-width: 760px) { .brand-logo { height: 28px; } }
+@media (max-width: 760px) { .brand-logo { height: 44px; } }
 .masthead-meta { font-size: 13px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 
 /* ---------- Hero ---------- */
