@@ -179,7 +179,7 @@
     var eyebrow = document.querySelector(".hero .eyebrow");
     if (eyebrow) eyebrow.textContent = "Budżet państwa · rok " + yr;
     var lead = document.getElementById("hero-lead");
-    if (lead) lead.textContent = "Każda złotówka z ustawy budżetowej, rozłożona na czynniki pierwsze. Wielkość pola odpowiada kwocie — kliknij, żeby wejść głębiej. Dane pochodzą wprost z ustawy budżetowej na rok " + yr + " i sumują się co do tysiąca złotych.";
+    if (lead) lead.textContent = "Każda złotówka z ustawy budżetowej, rozłożona na czynniki pierwsze. Wielkość pola odpowiada kwocie. Kliknij, żeby wejść głębiej. Dane pochodzą wprost z ustawy budżetowej na rok " + yr + " i sumują się co do tysiąca złotych.";
     var mast = document.getElementById("masthead-meta");
     if (mast && m.ustawa) mast.textContent = m.ustawa;
   }
@@ -809,7 +809,7 @@
     var cards = [
       { label: "Wzrost wydatków", to: growth, fmt: statPctFmt(0), foot: first.rok + " → " + last.rok },
       { label: "Największy deficyt", to: maxDef.deficyt, fmt: statMoneyFmt(maxDef.deficyt), foot: "Rok " + maxDef.rok, danger: true },
-      { label: "Budżet zbilansowany", to: balanced.length ? balanced[0] : 0, fmt: function () { return { num: balanced.length ? String(balanced[0]) : "—", unit: "" }; }, foot: balanced.length ? "Deficyt = 0" : "Brak", noAnim: true },
+      { label: "Budżet zbilansowany", to: balanced.length ? balanced[0] : 0, fmt: function () { return { num: balanced.length ? String(balanced[0]) : "b.d.", unit: "" }; }, foot: balanced.length ? "Deficyt = 0" : "Brak", noAnim: true },
       { label: "Suma deficytów", to: cumDef, fmt: statMoneyFmt(cumDef), foot: first.rok + "–" + last.rok }
     ];
     var host = document.getElementById("trend-kpis");

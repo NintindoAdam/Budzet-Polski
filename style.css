@@ -99,12 +99,13 @@ button.mbar:active { border-color: var(--line-strong); background: var(--bg); tr
   gap: 16px; padding-top: 18px; padding-bottom: 18px; flex-wrap: wrap;
 }
 .brand { display: flex; align-items: baseline; gap: 12px; }
-.brand-mark {
-  font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase;
-  color: var(--accent); font-weight: 500;
+a.brand-mark {
+  display: inline-block; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--accent); font-weight: 500; text-decoration: none; padding: 4px 0;
+  transition: opacity var(--dur-ui) var(--ease-out);
 }
-.brand-sep { color: var(--line-strong); }
-.brand-sub { font-size: 13px; color: var(--ink-faint); }
+a.brand-mark:active { opacity: 0.7; }
+@media (hover: hover) and (pointer: fine) { a.brand-mark:hover { text-decoration: underline; } }
 .masthead-meta { font-size: 13px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 
 /* ---------- Hero ---------- */
@@ -323,7 +324,7 @@ button.mbar:active { border-color: var(--line-strong); background: var(--bg); tr
 .foot { border-top: 1px solid var(--line); margin-top: 64px; padding: 28px 0 56px; }
 .foot .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
   font-size: 13px; color: var(--ink-faint); }
-.foot a { color: var(--accent); text-decoration: none; }
+.foot a { color: var(--accent); text-decoration: none; display: inline-block; padding: 4px 2px; font-weight: 500; }
 @media (hover: hover) and (pointer: fine) { .foot a:hover { text-decoration: underline; } }
 
 /* ---------- Loading / error ---------- */
