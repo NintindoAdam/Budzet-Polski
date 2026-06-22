@@ -255,18 +255,32 @@
     var total = d3.sum(nodes, function (d) { return d.value; });
 
     var reduce = prefersReduced();
-    var rise = reduce ? 0 : 16;
+    // tiles scale-pop into place from their own centre: 0.85 → 1.04 (expand) → 1.0 (settle).
+    // compound transform keeps the tile positioned while scaling about its centre.
+    function tf(d, s) {
+      var w = d.x1 - d.x0, h = d.y1 - d.y0;
+      return "translate(" + (d.x0 + w / 2) + "," + (d.y0 + h / 2) + ") scale(" + s + ") translate(" + (-w / 2) + "," + (-h / 2) + ")";
+    }
     var g = svg.selectAll("g.tile").data(root.leaves()).enter()
       .append("g").attr("class", "tile")
-      .attr("transform", function (d) { return "translate(" + d.x0 + "," + (d.y0 + rise) + ")"; })
-      .style("opacity", 0);
+      .attr("transform", function (d) { return tf(d, reduce ? 1 : 0.85); })
+      .style("opacity", reduce ? 1 : 0);
 
-    g.transition()
-      .duration(reduce ? 0 : 360)
-      .delay(function (d, i) { return reduce ? 0 : Math.min(i * 26, 560); })
-      .ease(d3.easeCubicOut)
-      .style("opacity", 1)
-      .attr("transform", function (d) { return "translate(" + d.x0 + "," + d.y0 + ")"; });
+    if (!reduce) {
+      var t1 = g.transition()
+        .delay(function (d, i) { return Math.min(i * 22, 480); })
+        .duration(230).ease(d3.easeCubicOut)
+        .style("opacity", 1)
+        .attrTween("transform", function (d) {
+          var i = d3.interpolateNumber(0.85, 1.04);
+          return function (tt) { return tf(d, i(tt)); };
+        });
+      t1.transition().duration(150).ease(d3.easeCubicInOut)
+        .attrTween("transform", function (d) {
+          var i = d3.interpolateNumber(1.04, 1);
+          return function (tt) { return tf(d, i(tt)); };
+        });
+    }
 
     g.append("rect")
       .attr("width", function (d) { return Math.max(0, d.x1 - d.x0); })
