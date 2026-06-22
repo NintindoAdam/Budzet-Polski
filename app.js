@@ -87,10 +87,15 @@
       wireAxis();
       wireYear();
       window.addEventListener("resize", debounce(onResize, 150));
+      // release the staggered first-load entrance after the first paint
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { document.body.classList.add("is-loaded"); });
+      });
     })
     .catch(function (err) {
       var s = document.getElementById("tree-state");
       if (s) s.innerHTML = '<i class="ti ti-alert-triangle"></i> Nie udało się wczytać danych budżetu. Odśwież stronę lub spróbuj ponownie później.';
+      document.body.classList.add("is-loaded"); // reveal hero even if data fails
       console.error(err);
     });
 
@@ -110,11 +115,11 @@
       var cover = (m.dochody / m.wydatki * 100);
       cards.push({ label: "Pokrycie wydatków", value: cover.toFixed(0) + "%", foot: "Dochody / wydatki", danger: false });
     }
-    var html = cards.map(function (c) {
+    var html = cards.map(function (c, i) {
       var parts = c.value.split(" ");
       var num = parts.shift();
       var unit = parts.join(" ");
-      return '<div class="stat">' +
+      return '<div class="stat anim-in" style="--anim-delay:' + (180 + i * 50) + 'ms">' +
         '<p class="stat-label">' + c.label + '</p>' +
         '<p class="stat-value' + (c.danger ? " is-danger" : "") + '">' + num +
         (unit ? '<span class="unit">' + unit + '</span>' : '') + '</p>' +
@@ -203,12 +208,19 @@
 
     var total = d3.sum(nodes, function (d) { return d.value; });
 
+    var reduce = prefersReduced();
+    var rise = reduce ? 0 : 8;
     var g = svg.selectAll("g.tile").data(root.leaves()).enter()
       .append("g").attr("class", "tile")
-      .attr("transform", function (d) { return "translate(" + d.x0 + "," + d.y0 + ")"; })
+      .attr("transform", function (d) { return "translate(" + d.x0 + "," + (d.y0 + rise) + ")"; })
       .style("opacity", 0);
 
-    g.transition().duration(prefersReduced() ? 0 : 350).style("opacity", 1);
+    g.transition()
+      .duration(reduce ? 0 : 300)
+      .delay(function (d, i) { return reduce ? 0 : Math.min(i * 18, 400); })
+      .ease(d3.easeCubicOut)
+      .style("opacity", 1)
+      .attr("transform", function (d) { return "translate(" + d.x0 + "," + d.y0 + ")"; });
 
     g.append("rect")
       .attr("width", function (d) { return Math.max(0, d.x1 - d.x0); })
@@ -270,11 +282,12 @@
     var tail = showAll ? [] : nodes.slice(headN);
     var tailSum = d3.sum(tail, function (d) { return d.value; });
 
-    function bar(d) {
+    function bar(d, idx) {
       var c = CMAP[colorKey(d.name)];
       var w = Math.max(2, d.value / max * 100);
       var pct = (d.value / total * 100).toFixed(1).replace(".", ",");
       var drill = canDrill(d);
+      var delay = Math.min((idx || 0) * 30, 360);
       var el = document.createElement(drill ? "button" : "div");
       el.className = "mbar" + (drill ? " is-drill" : "");
       el.innerHTML =
@@ -282,7 +295,7 @@
           '<span class="mbar-name">' + escapeHtml(d.name) + (drill ? ' <i class="ti ti-chevron-right" aria-hidden="true"></i>' : '') + '</span>' +
           '<span class="mbar-amt">' + moneyShort(d.value) + '</span>' +
         '</span>' +
-        '<span class="mbar-track"><span class="mbar-fill" style="width:' + w.toFixed(1) + '%;background:' + c.fill + ';border:1px solid ' + c.line + '"></span></span>' +
+        '<span class="mbar-track"><span class="mbar-fill grow-in" style="width:' + w.toFixed(1) + '%;background:' + c.fill + ';border:1px solid ' + c.line + ';--anim-delay:' + delay + 'ms"></span></span>' +
         '<span class="mbar-pct">' + pct + '%</span>';
       if (drill) {
         el.setAttribute("aria-label", d.name + ", " + money(d.value) + ", dotknij aby wejść w szczegóły");
@@ -291,7 +304,7 @@
       return el;
     }
 
-    head.forEach(function (d) { host.appendChild(bar(d)); });
+    head.forEach(function (d, i) { host.appendChild(bar(d, i)); });
 
     if (tail.length) {
       var toggle = document.createElement("button");
@@ -316,8 +329,8 @@
         var existing = host.querySelectorAll(".mbar-tail");
         existing.forEach(function (n) { n.remove(); });
         if (restExpanded) {
-          tail.forEach(function (d) {
-            var b = bar(d);
+          tail.forEach(function (d, i) {
+            var b = bar(d, i);
             b.classList.add("mbar-tail");
             host.appendChild(b);
           });
@@ -325,7 +338,7 @@
       });
       host.appendChild(toggle);
       if (restExpanded) {
-        tail.forEach(function (d) { var b = bar(d); b.classList.add("mbar-tail"); host.appendChild(b); });
+        tail.forEach(function (d, i) { var b = bar(d, i); b.classList.add("mbar-tail"); host.appendChild(b); });
       }
     }
   }
@@ -456,15 +469,17 @@
       links: g.links.map(function (d) { return Object.assign({}, d); })
     });
 
-    svg.append("g").attr("fill", "none")
+    var reduceS = prefersReduced();
+    var slinks = svg.append("g").attr("fill", "none")
       .selectAll("path").data(graph.links).enter().append("path")
       .attr("class", "slink").attr("d", d3.sankeyLinkHorizontal())
       .attr("stroke", function (d) {
         return d.source.name === "Deficyt (dług)" ? cssVar("var(--danger)") : sankeyNodeColor(d.target.kind === "exp" ? d.target : d.source);
       })
-      .attr("stroke-opacity", 0.3)
-      .attr("stroke-width", function (d) { return Math.max(1, d.width); })
-      .append("title").text(function (d) { return d.source.name + " → " + d.target.name + "\n" + money(d.value); });
+      .attr("stroke-width", function (d) { return Math.max(1, d.width); });
+    slinks.append("title").text(function (d) { return d.source.name + " → " + d.target.name + "\n" + money(d.value); });
+    slinks.attr("stroke-opacity", reduceS ? 0.3 : 0)
+      .transition().duration(reduceS ? 0 : 450).ease(d3.easeCubicOut).attr("stroke-opacity", 0.3);
 
     var node = svg.append("g").selectAll("g").data(graph.nodes).enter().append("g").attr("class", "snode");
     node.append("rect")
@@ -623,13 +638,14 @@
     types.sort(function (a, b) { return b.value - a.value; });
 
     var el = document.getElementById("types");
-    el.innerHTML = types.map(function (t) {
+    el.innerHTML = types.map(function (t, i) {
       var pct = (t.value / total * 100);
       var w = (t.value / max * 100);
       var c = CMAP[t.key];
+      var delay = Math.min(i * 40, 360);
       return '<div class="type-row">' +
         '<div class="type-name">' + t.name + '</div>' +
-        '<div class="type-bar-track"><div class="type-bar-fill" style="width:' + w.toFixed(1) + '%;background:' + c.fill + ';border:1px solid ' + c.line + '"></div></div>' +
+        '<div class="type-bar-track"><div class="type-bar-fill grow-in" style="width:' + w.toFixed(1) + '%;background:' + c.fill + ';border:1px solid ' + c.line + ';--anim-delay:' + delay + 'ms"></div></div>' +
         '<div class="type-amt">' + money(t.value) + ' <span style="color:var(--ink-faint);font-weight:400">· ' + pct.toFixed(1).replace(".", ",") + '%</span></div>' +
         '</div>';
     }).join("");
@@ -650,7 +666,17 @@
       document.getElementById(map[k][0]).setAttribute("aria-selected", isSel ? "true" : "false");
       var panel = document.getElementById(map[k][1]);
       panel.classList.toggle("is-active", isSel);
-      if (isSel) panel.removeAttribute("hidden"); else panel.setAttribute("hidden", "");
+      if (isSel) {
+        panel.removeAttribute("hidden");
+        if (!prefersReduced()) {
+          panel.classList.remove("fade-in");
+          void panel.offsetWidth; // reflow so the animation re-triggers each switch
+          panel.classList.add("fade-in");
+        }
+      } else {
+        panel.setAttribute("hidden", "");
+        panel.classList.remove("fade-in");
+      }
     });
     // axis toggle: only meaningful for treemap
     document.getElementById("axis-toggle").style.display = (v === "tree") ? "inline-flex" : "none";
@@ -685,10 +711,12 @@
       DATA = json;
       YEAR = yr;
       renderStats();
-      // re-render whichever year-specific view is active
-      if (view === "tree") drawTree();
-      else if (view === "flow") drawSankey();
-      else if (view === "type") drawTypes();
+      // re-render whichever year-specific view is active, with a blurred crossfade
+      crossfadeRedraw(function () {
+        if (view === "tree") drawTree();
+        else if (view === "flow") drawSankey();
+        else if (view === "type") drawTypes();
+      });
     }
 
     if (YEAR_CACHE[yr]) { apply(YEAR_CACHE[yr]); return; }
@@ -758,6 +786,25 @@
   }
   function escapeHtml(s) { return s.replace(/[&<>"]/g, function (c) { return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); }
   function prefersReduced() { return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches; }
+
+  // active chart container for the current view (target of the year-change crossfade)
+  function activeChartEl() {
+    if (view === "flow") return document.getElementById("sankey-wrap");
+    if (view === "type") return document.getElementById("types");
+    return document.getElementById("treemap-wrap");
+  }
+  // blur out → swap data → fade back in. Blur masks the imperfect state swap.
+  function crossfadeRedraw(redraw) {
+    var el = activeChartEl();
+    if (!el || prefersReduced()) { redraw(); return; }
+    el.classList.add("chart-swap", "is-swapping");
+    setTimeout(function () {
+      redraw();
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { el.classList.remove("is-swapping"); });
+      });
+    }, 150);
+  }
   function debounce(fn, ms) { var t; return function () { clearTimeout(t); var a = arguments, c = this; t = setTimeout(function () { fn.apply(c, a); }, ms); }; }
 
 })();
