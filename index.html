@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.7.0/dist/tabler-icons.min.css">
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
 
@@ -82,6 +82,9 @@
         <button class="tab" role="tab" id="tab-type" aria-selected="false" aria-controls="panel-type">
           <i class="ti ti-chart-bar" aria-hidden="true"></i> Rodzaj wydatku
         </button>
+        <button class="tab" role="tab" id="tab-trends" aria-selected="false" aria-controls="panel-trends">
+          <i class="ti ti-trending-up" aria-hidden="true"></i> Trendy
+        </button>
       </div>
 
       <div class="control-right">
@@ -121,6 +124,52 @@
       <div class="types" id="types"></div>
       <p class="hint"><i class="ti ti-info-circle" aria-hidden="true"></i> Podział wg kolumn ustawy budżetowej (zestawienie zbiorcze według działów).</p>
     </div>
+
+    <!-- TRENDS DASHBOARD -->
+    <div class="panel" id="panel-trends" role="tabpanel" aria-labelledby="tab-trends" hidden>
+      <p style="color:var(--ink-soft); max-width:64ch; margin:0 0 16px;">Jak budżet państwa zmieniał się przez lata 2011–2026. Wszystkie kwoty to plan z ustaw budżetowych — porównywalne metodologicznie przez cały okres.</p>
+
+      <div class="state" id="trends-state"><div class="spinner"></div>Wczytuję dane historyczne…</div>
+
+      <div id="trends-body" hidden>
+        <div class="stats trend-kpis" id="trend-kpis" aria-label="Kluczowe wskaźniki w czasie"></div>
+
+        <!-- big three -->
+        <section class="trend-section">
+          <h3 class="trend-h">Wydatki, dochody i deficyt</h3>
+          <div class="trend-legend" id="legend-totals"></div>
+          <div class="chart-wrap"><svg id="chart-totals" role="img" aria-label="Wydatki, dochody i deficyt w latach 2011–2026"></svg></div>
+        </section>
+
+        <!-- type composition -->
+        <section class="trend-section">
+          <div class="trend-section-head">
+            <h3 class="trend-h">Struktura wydatków wg rodzaju</h3>
+            <span class="trend-toggle" id="trend-toggle" role="group" aria-label="Tryb wartości">
+              <span class="seg">
+                <button id="trend-zl" aria-pressed="true">kwoty (zł)</button>
+                <button id="trend-pct" aria-pressed="false">udział (%)</button>
+              </span>
+            </span>
+          </div>
+          <div class="trend-legend" id="legend-types"></div>
+          <div class="chart-wrap"><svg id="chart-types" role="img" aria-label="Struktura wydatków wg rodzaju w czasie"></svg></div>
+        </section>
+
+        <!-- category -->
+        <section class="trend-section">
+          <div class="trend-section-head">
+            <h3 class="trend-h">Wydatki wg działu</h3>
+            <label class="cat-pick">Dział:
+              <select id="trend-cat" aria-label="Wybór działu do porównania"></select>
+            </label>
+          </div>
+          <div class="chart-wrap"><svg id="chart-cat" role="img" aria-label="Wydatki wybranego działu w czasie"></svg></div>
+        </section>
+
+        <p class="hint"><i class="ti ti-info-circle" aria-hidden="true"></i> Pionowa linia oznacza rok wybrany powyżej. Przełącznik zł/% dotyczy struktury rodzajów i działów.</p>
+      </div>
+    </div>
   </section>
 </main>
 
@@ -135,6 +184,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
-<script src="app.js?v=10"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>

@@ -711,16 +711,321 @@
     }).join("");
   }
 
+  // ================= TRENDS DASHBOARD (cross-year) =================
+  var TRENDS = null;
+  var trendsMode = "zl";              // "zl" | "pct"
+  var trendsCat = "Obrona narodowa";
+  var trendsWired = false;
+
+  function loadTrends(cb) {
+    if (TRENDS) { cb(); return; }
+    var st = document.getElementById("trends-state");
+    fetch("trends-data.json")
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (json) {
+        TRENDS = json;
+        if (st) st.style.display = "none";
+        var body = document.getElementById("trends-body");
+        if (body) body.hidden = false;
+        populateCatPicker();
+        wireTrends();
+        cb();
+      })
+      .catch(function (err) {
+        console.error(err);
+        if (st) st.innerHTML = '<i class="ti ti-alert-triangle"></i> Nie udało się wczytać danych historycznych.';
+      });
+  }
+
+  function trendYears() { return TRENDS.meta.lata; }
+  function fmtYearAxis(yr) { return "'" + String(yr).slice(2); }
+  function typeShort(n) {
+    var map = {
+      "Świadczenia na rzecz osób fizycznych": "Świadczenia",
+      "Wydatki bieżące jednostek": "Bieżące",
+      "Dotacje i subwencje": "Dotacje i subw.",
+      "Wydatki majątkowe": "Majątkowe",
+      "Obsługa długu Skarbu Państwa": "Obsługa długu",
+      "Środki własne UE": "Środki UE",
+      "Współfinansowanie projektów UE": "Współfin. UE"
+    };
+    return map[n] || n;
+  }
+
+  // categories present in >=75% of years, sorted by latest-year size
+  function trendCategories() {
+    var count = {}, latest = TRENDS.lata[TRENDS.lata.length - 1], latestMap = {};
+    latest.dzialy.forEach(function (d) { latestMap[d.name] = d.plan; });
+    TRENDS.lata.forEach(function (r) { r.dzialy.forEach(function (d) { count[d.name] = (count[d.name] || 0) + 1; }); });
+    var n = TRENDS.lata.length;
+    return Object.keys(count).filter(function (k) { return count[k] >= Math.ceil(n * 0.75); })
+      .sort(function (a, b) { return (latestMap[b] || 0) - (latestMap[a] || 0); });
+  }
+  function populateCatPicker() {
+    var sel = document.getElementById("trend-cat");
+    if (!sel) return;
+    var cats = trendCategories();
+    if (cats.indexOf(trendsCat) < 0) trendsCat = cats[0];
+    sel.innerHTML = cats.map(function (c) {
+      return '<option value="' + escapeHtml(c) + '"' + (c === trendsCat ? " selected" : "") + '>' + escapeHtml(c) + '</option>';
+    }).join("");
+  }
+  function wireTrends() {
+    if (trendsWired) return;
+    trendsWired = true;
+    var zl = document.getElementById("trend-zl"), pct = document.getElementById("trend-pct");
+    if (zl) zl.addEventListener("click", function () { setTrendsMode("zl"); });
+    if (pct) pct.addEventListener("click", function () { setTrendsMode("pct"); });
+    var sel = document.getElementById("trend-cat");
+    if (sel) sel.addEventListener("change", function () { trendsCat = sel.value; drawTrendCategory(); });
+  }
+  function setTrendsMode(m) {
+    if (trendsMode === m) return;
+    trendsMode = m;
+    document.getElementById("trend-zl").setAttribute("aria-pressed", m === "zl" ? "true" : "false");
+    document.getElementById("trend-pct").setAttribute("aria-pressed", m === "pct" ? "true" : "false");
+    drawTrendTypes();
+    drawTrendCategory();
+  }
+
+  function drawTrends() { if (!TRENDS) return; drawTrendKPIs(); drawTrendCharts(); }
+  function drawTrendCharts() { if (!TRENDS) return; drawTrendTotals(); drawTrendTypes(); drawTrendCategory(); }
+
+  function buildLegendEl(id, items) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = items.map(function (it) {
+      return '<span class="legend-item"><span class="legend-swatch" style="background:' + it.color + '"></span>' + escapeHtml(it.label) + '</span>';
+    }).join("");
+  }
+
+  // ---- KPI cards ----
+  function drawTrendKPIs() {
+    var L = TRENDS.lata, first = L[0], last = L[L.length - 1];
+    var growth = (last.wydatki / first.wydatki - 1) * 100;
+    var maxDef = L.reduce(function (a, b) { return b.deficyt > a.deficyt ? b : a; });
+    var balanced = L.filter(function (r) { return r.deficyt === 0; }).map(function (r) { return r.rok; });
+    var cumDef = d3.sum(L, function (r) { return r.deficyt; });
+    var cards = [
+      { label: "Wzrost wydatków", to: growth, fmt: statPctFmt(0), foot: first.rok + " → " + last.rok },
+      { label: "Największy deficyt", to: maxDef.deficyt, fmt: statMoneyFmt(maxDef.deficyt), foot: "Rok " + maxDef.rok, danger: true },
+      { label: "Budżet zbilansowany", to: balanced.length ? balanced[0] : 0, fmt: function () { return { num: balanced.length ? String(balanced[0]) : "—", unit: "" }; }, foot: balanced.length ? "Deficyt = 0" : "Brak", noAnim: true },
+      { label: "Suma deficytów", to: cumDef, fmt: statMoneyFmt(cumDef), foot: first.rok + "–" + last.rok }
+    ];
+    var host = document.getElementById("trend-kpis");
+    host.innerHTML = cards.map(function (c, i) {
+      return '<div class="stat anim-in" style="--anim-delay:' + (i * 50) + 'ms">' +
+        '<p class="stat-label">' + c.label + '</p>' +
+        '<p class="stat-value' + (c.danger ? " is-danger" : "") + '" data-tk="' + i + '"></p>' +
+        '<p class="stat-foot">' + c.foot + '</p></div>';
+    }).join("");
+    cards.forEach(function (c, i) {
+      var el = host.querySelector('.stat-value[data-tk="' + i + '"]');
+      if (c.noAnim) { var rr = c.fmt(c.to); el.innerHTML = rr.num + (rr.unit ? '<span class="unit">' + rr.unit + '</span>' : ""); return; }
+      var key = "__tk" + i, from = prevStatVals[key]; if (from == null) from = 0;
+      tweenValue(from, c.to, 900, function (v) {
+        var r = c.fmt(v);
+        el.innerHTML = r.num + (r.unit ? '<span class="unit">' + r.unit + '</span>' : "");
+      });
+      prevStatVals[key] = c.to;
+    });
+  }
+
+  // ---- reusable responsive line chart with touch focus ----
+  function trendLineChart(svgId, series, opts) {
+    opts = opts || {};
+    var svgEl = document.getElementById(svgId);
+    if (!svgEl) return;
+    var wrap = svgEl.parentNode;
+    var W = wrap.clientWidth || 800;
+    var narrow = W < 520;
+    var H = opts.height || (narrow ? 240 : 300);
+    var m = { t: 14, r: narrow ? 12 : 18, b: 26, l: narrow ? 46 : 58 };
+    var iw = Math.max(10, W - m.l - m.r), ih = Math.max(10, H - m.t - m.b);
+    var years = trendYears();
+    var x = d3.scaleLinear().domain([years[0], years[years.length - 1]]).range([0, iw]);
+    var allY = [];
+    series.forEach(function (s) { s.values.forEach(function (p) { if (p.y != null) allY.push(p.y); }); });
+    var ymax = d3.max(allY) || 1;
+    var ymin = opts.allowNeg ? Math.min(0, d3.min(allY)) : 0;
+    var y = d3.scaleLinear().domain([ymin, ymax * 1.06]).nice().range([ih, 0]);
+
+    var svg = d3.select(svgEl).attr("viewBox", "0 0 " + W + " " + H).attr("width", "100%").attr("height", H);
+    svg.selectAll("*").remove();
+    var g = svg.append("g").attr("transform", "translate(" + m.l + "," + m.t + ")");
+
+    var yticks = y.ticks(narrow ? 4 : 5);
+    g.selectAll("line.grid").data(yticks).enter().append("line").attr("class", "grid")
+      .attr("x1", 0).attr("x2", iw).attr("y1", y).attr("y2", y);
+    g.selectAll("text.gy").data(yticks).enter().append("text").attr("class", "axis-label gy")
+      .attr("x", -8).attr("y", y).attr("dy", "0.32em").attr("text-anchor", "end")
+      .text(function (d) { return (opts.yFmt || moneyShort)(d); });
+
+    var step = narrow ? 3 : (W < 760 ? 2 : 1);
+    g.selectAll("text.gx").data(years).enter().append("text").attr("class", "axis-label gx")
+      .attr("x", function (d) { return x(d); }).attr("y", ih + 18).attr("text-anchor", "middle")
+      .text(function (d, i) { return (i % step === 0 || i === years.length - 1) ? (narrow ? fmtYearAxis(d) : d) : ""; });
+
+    if (opts.markerYear != null) {
+      g.append("line").attr("class", "year-marker")
+        .attr("x1", x(opts.markerYear)).attr("x2", x(opts.markerYear)).attr("y1", 0).attr("y2", ih);
+    }
+
+    var reduce = prefersReduced();
+    var line = d3.line().defined(function (p) { return p.y != null; })
+      .x(function (p) { return x(p.x); }).y(function (p) { return y(p.y); }).curve(d3.curveMonotoneX);
+
+    series.forEach(function (s) {
+      var path = g.append("path").datum(s.values).attr("fill", "none")
+        .attr("stroke", s.color).attr("stroke-width", narrow ? 2.2 : 2.6)
+        .attr("stroke-linejoin", "round").attr("stroke-linecap", "round").attr("d", line);
+      if (!reduce) {
+        var len = path.node().getTotalLength();
+        if (len > 0) path.attr("stroke-dasharray", len + " " + len).attr("stroke-dashoffset", len)
+          .transition().duration(700).ease(d3.easeCubicOut).attr("stroke-dashoffset", 0)
+          .on("end", function () { d3.select(this).attr("stroke-dasharray", null); });
+      }
+      s.values.forEach(function (p) {
+        if (p.y == null) return;
+        g.append("circle").attr("class", "tdot").attr("r", narrow ? 2.4 : 3)
+          .attr("cx", x(p.x)).attr("cy", y(p.y)).attr("fill", s.color);
+      });
+    });
+
+    // focus interaction (mouse + touch)
+    var focusLine = g.append("line").attr("class", "focus-line").attr("y1", 0).attr("y2", ih).style("opacity", 0);
+    var ov = g.append("rect").attr("width", iw).attr("height", ih).attr("fill", "transparent");
+    var node = ov.node();
+    function move(e) {
+      var rect = node.getBoundingClientRect();
+      var mx = e.clientX - rect.left;
+      var yr = Math.max(years[0], Math.min(years[years.length - 1], Math.round(x.invert(mx))));
+      focusLine.attr("x1", x(yr)).attr("x2", x(yr)).style("opacity", 1);
+      var rows = series.map(function (s) {
+        var p = s.values.filter(function (pp) { return pp.x === yr; })[0];
+        if (!p || p.y == null) return "";
+        return '<div class="tt-row"><span class="tt-dot" style="background:' + s.color + '"></span>' +
+          escapeHtml(s.name) + ': <strong>' + (opts.yTip || opts.yFmt || money)(p.y) + '</strong></div>';
+      }).join("");
+      tooltip.innerHTML = '<strong>' + yr + '</strong>' + rows;
+      tooltip.style.opacity = "1";
+      positionTip(e);
+    }
+    function leave() { hideTip(); focusLine.style("opacity", 0); }
+    node.addEventListener("mousemove", move);
+    node.addEventListener("mouseleave", leave);
+    node.addEventListener("touchstart", function (e) { move(e.touches[0]); }, { passive: true });
+    node.addEventListener("touchmove", function (e) { e.preventDefault(); move(e.touches[0]); }, { passive: false });
+    node.addEventListener("touchend", leave);
+  }
+
+  // ---- module 2: totals (wydatki / dochody / deficyt) ----
+  function drawTrendTotals() {
+    var L = TRENDS.lata;
+    function vals(f) { return L.map(function (r) { return { x: r.rok, y: r[f] }; }); }
+    var series = [
+      { name: "Wydatki", color: cssVar("var(--accent)"), values: vals("wydatki") },
+      { name: "Dochody", color: cssVar("var(--c-transfer-line)"), values: vals("dochody") },
+      { name: "Deficyt", color: cssVar("var(--danger)"), values: vals("deficyt") }
+    ];
+    buildLegendEl("legend-totals", series.map(function (s) { return { label: s.name, color: s.color }; }));
+    trendLineChart("chart-totals", series, { markerYear: YEAR, yFmt: moneyShort, yTip: money });
+  }
+
+  // ---- module 4: selected category over time ----
+  function drawTrendCategory() {
+    if (!TRENDS) return;
+    var L = TRENDS.lata, pctMode = trendsMode === "pct";
+    var values = L.map(function (r) {
+      var d = r.dzialy.filter(function (x) { return x.name === trendsCat; })[0];
+      var v = d ? d.plan : null;
+      if (pctMode && v != null) v = v / r.wydatki * 100;
+      return { x: r.rok, y: v };
+    });
+    var color = cssVar(CMAP[colorKey(trendsCat)].line);
+    trendLineChart("chart-cat", [{ name: trendsCat, color: color, values: values }], {
+      markerYear: YEAR,
+      yFmt: pctMode ? function (v) { return v.toFixed(0) + "%"; } : moneyShort,
+      yTip: pctMode ? function (v) { return v.toFixed(1).replace(".", ",") + "%"; } : money
+    });
+  }
+
+  // ---- module 3: expense type composition over time (stacked columns) ----
+  function drawTrendTypes() {
+    if (!TRENDS) return;
+    var svgEl = document.getElementById("chart-types");
+    if (!svgEl) return;
+    var wrap = svgEl.parentNode;
+    var W = wrap.clientWidth || 800;
+    var narrow = W < 520;
+    var H = narrow ? 270 : 330;
+    var m = { t: 14, r: narrow ? 10 : 16, b: 26, l: narrow ? 46 : 58 };
+    var iw = Math.max(10, W - m.l - m.r), ih = Math.max(10, H - m.t - m.b);
+    var L = TRENDS.lata, years = trendYears(), pctMode = trendsMode === "pct";
+    var typeNames = L[L.length - 1].typy.slice().sort(function (a, b) { return b.plan - a.plan; }).map(function (t) { return t.name; });
+
+    var x = d3.scaleBand().domain(years.map(String)).range([0, iw]).padding(narrow ? 0.16 : 0.32);
+    var maxTotal = pctMode ? 100 : d3.max(L, function (r) { return d3.sum(r.typy, function (t) { return t.plan; }); });
+    var y = d3.scaleLinear().domain([0, maxTotal]).nice().range([ih, 0]);
+
+    var svg = d3.select(svgEl).attr("viewBox", "0 0 " + W + " " + H).attr("width", "100%").attr("height", H);
+    svg.selectAll("*").remove();
+    var g = svg.append("g").attr("transform", "translate(" + m.l + "," + m.t + ")");
+
+    var yticks = y.ticks(narrow ? 4 : 5);
+    g.selectAll("line.grid").data(yticks).enter().append("line").attr("class", "grid")
+      .attr("x1", 0).attr("x2", iw).attr("y1", y).attr("y2", y);
+    g.selectAll("text.gy").data(yticks).enter().append("text").attr("class", "axis-label gy")
+      .attr("x", -8).attr("y", y).attr("dy", "0.32em").attr("text-anchor", "end")
+      .text(function (d) { return pctMode ? d + "%" : moneyShort(d); });
+
+    var step = narrow ? 3 : (W < 760 ? 2 : 1);
+    g.selectAll("text.gx").data(years).enter().append("text").attr("class", "axis-label gx")
+      .attr("x", function (d) { return x(String(d)) + x.bandwidth() / 2; }).attr("y", ih + 18).attr("text-anchor", "middle")
+      .text(function (d, i) { return (i % step === 0 || i === years.length - 1) ? (narrow ? fmtYearAxis(d) : d) : ""; });
+
+    var reduce = prefersReduced();
+    L.forEach(function (r) {
+      var total = d3.sum(r.typy, function (t) { return t.plan; });
+      var cum = 0, bx = x(String(r.rok)), bw = x.bandwidth();
+      var colDelay = Math.min((r.rok - years[0]) * 18, 280);
+      typeNames.forEach(function (tn) {
+        var t = r.typy.filter(function (z) { return z.name === tn; })[0];
+        var val = t ? t.plan : 0;
+        var disp = pctMode ? (total ? val / total * 100 : 0) : val;
+        var y0 = cum, y1 = cum + disp; cum = y1;
+        var ry = y(y1), rh = Math.max(0, y(y0) - y(y1));
+        var rect = g.append("rect").attr("class", "tseg")
+          .attr("x", bx).attr("width", bw)
+          .attr("y", reduce ? ry : ih).attr("height", reduce ? rh : 0)
+          .attr("fill", cssVar(CMAP[typeColorKey(tn)].fill))
+          .attr("stroke", cssVar(CMAP[typeColorKey(tn)].line)).attr("stroke-width", 0.5);
+        rect.append("title").text(tn + " (" + r.rok + "): " + (pctMode ? disp.toFixed(1).replace(".", ",") + "%" : money(val)));
+        if (!reduce) rect.transition().delay(colDelay).duration(380).ease(d3.easeCubicOut).attr("y", ry).attr("height", rh);
+      });
+    });
+
+    // frame the currently-selected year
+    if (years.indexOf(YEAR) >= 0) {
+      g.append("rect").attr("class", "col-current")
+        .attr("x", x(String(YEAR)) - 2).attr("y", 0).attr("width", x.bandwidth() + 4).attr("height", ih);
+    }
+
+    buildLegendEl("legend-types", typeNames.map(function (tn) {
+      return { label: typeShort(tn), color: cssVar(CMAP[typeColorKey(tn)].fill) };
+    }));
+  }
+
   // ---------- tabs & axis ----------
   function wireTabs() {
-    var tabs = [["tab-tree", "panel-tree", "tree"], ["tab-flow", "panel-flow", "flow"], ["tab-type", "panel-type", "type"]];
+    var tabs = [["tab-tree", "panel-tree", "tree"], ["tab-flow", "panel-flow", "flow"], ["tab-type", "panel-type", "type"], ["tab-trends", "panel-trends", "trends"]];
     tabs.forEach(function (t) {
       document.getElementById(t[0]).addEventListener("click", function () { switchView(t[2]); });
     });
   }
   function switchView(v) {
     view = v;
-    var map = { tree: ["tab-tree", "panel-tree"], flow: ["tab-flow", "panel-flow"], type: ["tab-type", "panel-type"] };
+    var map = { tree: ["tab-tree", "panel-tree"], flow: ["tab-flow", "panel-flow"], type: ["tab-type", "panel-type"], trends: ["tab-trends", "panel-trends"] };
     Object.keys(map).forEach(function (k) {
       var isSel = k === v;
       document.getElementById(map[k][0]).setAttribute("aria-selected", isSel ? "true" : "false");
@@ -743,6 +1048,7 @@
     if (v === "tree") drawTree();
     if (v === "flow") drawSankey();
     if (v === "type") drawTypes();
+    if (v === "trends") loadTrends(drawTrends);
   }
 
   function wireAxis() {
@@ -771,6 +1077,8 @@
       DATA = json;
       YEAR = yr;
       renderStats();
+      // trends dashboard is year-independent — just move the year marker, no crossfade
+      if (view === "trends") { if (TRENDS) drawTrendCharts(); return; }
       // re-render whichever year-specific view is active, with a blurred crossfade
       crossfadeRedraw(function () {
         if (view === "tree") drawTree();
@@ -812,6 +1120,7 @@
     if (view === "tree") drawTree();
     else if (view === "flow") drawSankey();
     else if (view === "type") drawTypes();
+    else if (view === "trends" && TRENDS) drawTrendCharts();
   }
 
   // redraw active view immediately when crossing the mobile/desktop breakpoint
