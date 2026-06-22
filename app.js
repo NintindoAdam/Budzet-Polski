@@ -7,7 +7,7 @@
   var DATA = null;
   var YEAR = 2026;                  // currently displayed year
   var YEAR_CACHE = {};              // year -> data json
-  var YEAR_FILES = { 2026: "budget-data.json", 2025: "budget-2025.json", 2024: "budget-2024.json", 2023: "budget-2023.json", 2022: "budget-2022.json", 2021: "budget-2021.json", 2020: "budget-2020.json" };
+  var YEAR_FILES = { 2026: "budget-data.json", 2025: "budget-2025.json", 2024: "budget-2024.json", 2023: "budget-2023.json", 2022: "budget-2022.json", 2021: "budget-2021.json", 2020: "budget-2020.json", 2019: "budget-2019.json", 2018: "budget-2018.json", 2017: "budget-2017.json", 2016: "budget-2016.json", 2015: "budget-2015.json", 2014: "budget-2014.json", 2013: "budget-2013.json", 2012: "budget-2012.json", 2011: "budget-2011.json" };
   var axis = "dzialy";        // "dzialy" | "czesci"
   var view = "tree";          // "tree" | "flow" | "type"
   var path = [];              // drill-down stack of node objects
