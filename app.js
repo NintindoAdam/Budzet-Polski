@@ -13,7 +13,13 @@
   var tooltip = document.getElementById("tooltip");
 
   var MOBILE_Q = window.matchMedia("(max-width: 760px)");
-  function isMobile() { return MOBILE_Q.matches; }
+  var COARSE_Q = window.matchMedia("(pointer: coarse)");
+  function isMobile() {
+    // treat as mobile if the viewport is narrow OR it's a touch device with a not-wide screen
+    if (MOBILE_Q.matches) return true;
+    if (COARSE_Q.matches && window.innerWidth < 900) return true;
+    return false;
+  }
   var MOBILE_TOP = 12;        // tiles shown before grouping into "Pozostałe"
   var restExpanded = false;   // mobile: is the "Pozostałe" list expanded?
 
@@ -157,7 +163,7 @@
   // ---------- treemap: desktop (full D3 treemap) ----------
   function drawTreeDesktop(nodes) {
     var list = document.getElementById("tree-rest");
-    if (list) list.innerHTML = "";
+    if (list) { list.innerHTML = ""; list.style.display = "none"; }
     var svgEl = document.getElementById("treemap");
     svgEl.style.display = "block";
 
@@ -228,6 +234,7 @@
   function drawTreeMobile(nodes) {
     document.getElementById("treemap").style.display = "none";
     var host = document.getElementById("tree-rest");
+    host.style.display = "block";
     host.innerHTML = "";
 
     var total = d3.sum(nodes, function (d) { return d.value; });
@@ -649,8 +656,10 @@
       restExpanded = false;
       onResize();
     };
-    if (MOBILE_Q.addEventListener) MOBILE_Q.addEventListener("change", handler);
-    else if (MOBILE_Q.addListener) MOBILE_Q.addListener(handler);
+    [MOBILE_Q, COARSE_Q].forEach(function (q) {
+      if (q.addEventListener) q.addEventListener("change", handler);
+      else if (q.addListener) q.addListener(handler);
+    });
   })();
 
   // ---------- helpers ----------

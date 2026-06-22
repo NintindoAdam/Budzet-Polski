@@ -234,8 +234,6 @@ button.mbar:hover, button.mbar:active { border-color: var(--line-strong); backgr
   .type-row { grid-template-columns: 1fr; gap: 6px; }
   .type-amt { text-align: left; }
   .hero { padding: 36px 0 24px; }
-  #treemap { display: none; }
-  #tree-rest { display: block; }
   .hint { margin-top: 18px; }
   .tab { padding: 8px 12px; font-size: 13px; }
 }
