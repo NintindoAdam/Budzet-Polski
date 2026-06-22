@@ -99,37 +99,83 @@
       console.error(err);
     });
 
+  // ---------- count-up animation for stat numbers ----------
+  var prevStatVals = {};   // label -> last numeric value, so year changes count from the old value
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+  function tweenValue(from, to, dur, onUpdate) {
+    if (prefersReduced() || !dur || from === to) { onUpdate(to); return; }
+    var startTs = null;
+    function step(ts) {
+      if (startTs === null) startTs = ts;
+      var p = Math.min(1, (ts - startTs) / dur);
+      onUpdate(from + (to - from) * easeOutCubic(p));
+      if (p < 1) requestAnimationFrame(step);
+      else onUpdate(to);
+    }
+    requestAnimationFrame(step);
+  }
+  // formatter locked to the TARGET's magnitude so the unit never flickers mid-count
+  function statMoneyFmt(toThousands) {
+    var zl = toThousands * 1000, div, unit, dec;
+    if (zl >= 1e9) { div = 1e9; unit = "mld zł"; dec = 1; }
+    else if (zl >= 1e6) { div = 1e6; unit = "mln zł"; dec = 0; }
+    else { div = 1; unit = "zł"; dec = 0; }
+    return function (vThousands) {
+      var n = (vThousands * 1000) / div;
+      return { num: n.toLocaleString("pl-PL", { minimumFractionDigits: dec, maximumFractionDigits: dec }), unit: unit };
+    };
+  }
+  function statPctFmt(dec) {
+    return function (v) {
+      return { num: v.toLocaleString("pl-PL", { minimumFractionDigits: dec, maximumFractionDigits: dec }) + "%", unit: "" };
+    };
+  }
+
   // ---------- stats band ----------
   function renderStats() {
     var m = DATA.meta;
     var yr = m.rok || YEAR;
     var cards = [
-      { label: "Wydatki", value: money(m.wydatki), foot: "Plan na " + yr + " r.", danger: false },
-      { label: "Dochody", value: money(m.dochody), foot: "Wpływy podatkowe i niepodatkowe", danger: false },
-      { label: "Deficyt", value: money(m.deficyt), foot: "Wydatki minus dochody", danger: true }
+      { label: "Wydatki", to: m.wydatki, fmt: statMoneyFmt(m.wydatki), foot: "Plan na " + yr + " r.", danger: false },
+      { label: "Dochody", to: m.dochody, fmt: statMoneyFmt(m.dochody), foot: "Wpływy podatkowe i niepodatkowe", danger: false },
+      { label: "Deficyt", to: m.deficyt, fmt: statMoneyFmt(m.deficyt), foot: "Wydatki minus dochody", danger: true }
     ];
     if (m.dlug_pkb_proc != null) {
-      cards.push({ label: "Dług / PKB", value: m.dlug_pkb_proc.toLocaleString("pl-PL", { minimumFractionDigits: 1 }) + "%", foot: "Próg ostrożnościowy: 55%", danger: false });
+      cards.push({ label: "Dług / PKB", to: m.dlug_pkb_proc, fmt: statPctFmt(1), foot: "Próg ostrożnościowy: 55%", danger: false });
     } else {
       // 2025 plan: show share of expenses covered by income instead
-      var cover = (m.dochody / m.wydatki * 100);
-      cards.push({ label: "Pokrycie wydatków", value: cover.toFixed(0) + "%", foot: "Dochody / wydatki", danger: false });
+      cards.push({ label: "Pokrycie wydatków", to: (m.dochody / m.wydatki * 100), fmt: statPctFmt(0), foot: "Dochody / wydatki", danger: false });
     }
     var html = cards.map(function (c, i) {
-      var parts = c.value.split(" ");
-      var num = parts.shift();
-      var unit = parts.join(" ");
       return '<div class="stat anim-in" style="--anim-delay:' + (180 + i * 50) + 'ms">' +
         '<p class="stat-label">' + c.label + '</p>' +
-        '<p class="stat-value' + (c.danger ? " is-danger" : "") + '">' + num +
-        (unit ? '<span class="unit">' + unit + '</span>' : '') + '</p>' +
+        '<p class="stat-value' + (c.danger ? " is-danger" : "") + '" data-k="' + i + '"></p>' +
         '<p class="stat-foot">' + c.foot + '</p></div>';
     }).join("");
-    document.getElementById("stats").innerHTML = html;
+    var statsEl = document.getElementById("stats");
+    statsEl.innerHTML = html;
 
-    // update hero headline amount + year
+    cards.forEach(function (c, i) {
+      var el = statsEl.querySelector('.stat-value[data-k="' + i + '"]');
+      var from = prevStatVals[c.label]; if (from == null) from = 0;
+      tweenValue(from, c.to, 900, function (v) {
+        var r = c.fmt(v);
+        el.innerHTML = r.num + (r.unit ? '<span class="unit">' + r.unit + '</span>' : "");
+      });
+      prevStatVals[c.label] = c.to;
+    });
+
+    // update hero headline amount (count up too) + year
     var heroAmt = document.querySelector(".hero h1 .amt");
-    if (heroAmt) heroAmt.textContent = money(m.wydatki).replace(/ /g, "\u00a0");
+    if (heroAmt) {
+      var hfrom = prevStatVals["__hero"]; if (hfrom == null) hfrom = 0;
+      var hf = statMoneyFmt(m.wydatki);
+      tweenValue(hfrom, m.wydatki, 900, function (v) {
+        var r = hf(v);
+        heroAmt.textContent = (r.num + "\u00a0" + r.unit).replace(/ /g, "\u00a0");
+      });
+      prevStatVals["__hero"] = m.wydatki;
+    }
     var eyebrow = document.querySelector(".hero .eyebrow");
     if (eyebrow) eyebrow.textContent = "Budżet państwa · rok " + yr;
     var lead = document.getElementById("hero-lead");
@@ -209,15 +255,15 @@
     var total = d3.sum(nodes, function (d) { return d.value; });
 
     var reduce = prefersReduced();
-    var rise = reduce ? 0 : 8;
+    var rise = reduce ? 0 : 16;
     var g = svg.selectAll("g.tile").data(root.leaves()).enter()
       .append("g").attr("class", "tile")
       .attr("transform", function (d) { return "translate(" + d.x0 + "," + (d.y0 + rise) + ")"; })
       .style("opacity", 0);
 
     g.transition()
-      .duration(reduce ? 0 : 300)
-      .delay(function (d, i) { return reduce ? 0 : Math.min(i * 18, 400); })
+      .duration(reduce ? 0 : 360)
+      .delay(function (d, i) { return reduce ? 0 : Math.min(i * 26, 560); })
       .ease(d3.easeCubicOut)
       .style("opacity", 1)
       .attr("transform", function (d) { return "translate(" + d.x0 + "," + d.y0 + ")"; });

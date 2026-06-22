@@ -15,6 +15,17 @@
   --radius-sm: 6px;
   --maxw: 1120px;
 
+  /* motion — strong custom curves (built-in CSS easings are too weak) */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --dur-press: 140ms;
+  --dur-ui: 200ms;
+  --dur-enter: 320ms;
+
+  /* warm-tinted elevation (paper aesthetic, not neutral black) */
+  --shadow-sm: 0 1px 2px rgba(60, 50, 40, 0.04), 0 8px 24px -14px rgba(60, 50, 40, 0.10);
+  --shadow-pop: 0 4px 18px rgba(60, 50, 40, 0.18);
+
   /* categorical ramp — grouped by spend theme */
   --c-social: #B5D4F4;  --c-social-ink: #0C447C;  --c-social-line: #378ADD;
   --c-transfer: #9FE1CB; --c-transfer-ink: #085041; --c-transfer-line: #1D9E75;
@@ -61,8 +72,12 @@ body {
   color: var(--ink);
   cursor: default;
 }
-button.mbar { cursor: pointer; transition: border-color 0.12s, background 0.12s; }
-button.mbar:hover, button.mbar:active { border-color: var(--line-strong); background: var(--bg); }
+button.mbar { cursor: pointer;
+  transition: border-color var(--dur-ui) var(--ease-out), background var(--dur-ui) var(--ease-out), transform var(--dur-press) var(--ease-out); }
+button.mbar:active { border-color: var(--line-strong); background: var(--bg); transform: scale(0.985); }
+@media (hover: hover) and (pointer: fine) {
+  button.mbar:hover { border-color: var(--line-strong); background: var(--bg); }
+}
 .mbar.is-drill .mbar-name { color: var(--ink); }
 .mbar-head { grid-area: head; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .mbar-name { font-size: 14px; font-weight: 500; line-height: 1.3; }
@@ -93,8 +108,14 @@ button.mbar:hover, button.mbar:active { border-color: var(--line-strong); backgr
 .masthead-meta { font-size: 13px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 
 /* ---------- Hero ---------- */
-.hero { padding: 56px 0 32px; }
-.hero .wrap { max-width: var(--maxw); }
+.hero { padding: 56px 0 32px; position: relative; overflow: hidden; }
+.hero::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(110% 75% at 12% -10%, rgba(124, 92, 62, 0.07), transparent 58%),
+    radial-gradient(90% 70% at 100% 0%, rgba(55, 138, 221, 0.05), transparent 60%);
+}
+.hero .wrap { max-width: var(--maxw); position: relative; z-index: 1; }
 .eyebrow {
   font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase;
   color: var(--accent); font-weight: 500; margin: 0 0 16px;
@@ -112,6 +133,7 @@ button.mbar:hover, button.mbar:active { border-color: var(--line-strong); backgr
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
   background: var(--line); border: 1px solid var(--line);
   border-radius: var(--radius); overflow: hidden; margin: 40px 0 8px;
+  box-shadow: var(--shadow-sm);
 }
 .stat { background: var(--surface); padding: 20px 22px; }
 .stat-label { font-size: 13px; color: var(--ink-faint); margin: 0 0 8px; }
@@ -129,14 +151,15 @@ button.mbar:hover, button.mbar:active { border-color: var(--line-strong); backgr
   gap: 16px; flex-wrap: wrap; margin: 44px 0 18px;
 }
 .tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 4px; }
+  border-radius: var(--radius); padding: 4px; box-shadow: var(--shadow-sm); }
 .tab {
   appearance: none; border: 0; background: transparent; cursor: pointer;
   font: inherit; font-size: 14px; color: var(--ink-soft);
   padding: 8px 16px; border-radius: var(--radius-sm); display: flex; align-items: center; gap: 7px;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--dur-ui) var(--ease-out), color var(--dur-ui) var(--ease-out), transform var(--dur-press) var(--ease-out);
 }
-.tab:hover { color: var(--ink); }
+.tab:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) { .tab:hover { color: var(--ink); } }
 .tab[aria-selected="true"] { background: var(--ink); color: var(--bg); }
 .tab i { font-size: 16px; }
 
@@ -152,9 +175,14 @@ button.mbar:hover, button.mbar:active { border-color: var(--line-strong); backgr
   appearance: none; border: 1.5px solid var(--line-strong); background: var(--bg); cursor: pointer;
   font: inherit; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums;
   color: var(--ink-soft); padding: 8px 14px; border-radius: var(--radius-sm);
-  transition: all 0.13s; letter-spacing: -0.01em;
+  transition: border-color var(--dur-ui) var(--ease-out), color var(--dur-ui) var(--ease-out),
+    background var(--dur-ui) var(--ease-out), transform var(--dur-press) var(--ease-out);
+  letter-spacing: -0.01em;
 }
-.year-bar-buttons button:hover { border-color: var(--accent); color: var(--ink); }
+.year-bar-buttons button:active { transform: scale(0.96); }
+@media (hover: hover) and (pointer: fine) {
+  .year-bar-buttons button:hover { border-color: var(--accent); color: var(--ink); }
+}
 .year-bar-buttons button[aria-pressed="true"] {
   background: var(--accent); border-color: var(--accent); color: #fff;
 }
@@ -167,8 +195,10 @@ button.mbar:hover, button.mbar:active { border-color: var(--line-strong); backgr
 .axis-toggle .seg { display: flex; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .axis-toggle button {
   appearance: none; border: 0; background: var(--surface); cursor: pointer; font: inherit;
-  font-size: 13px; color: var(--ink-soft); padding: 8px 14px; transition: background 0.15s, color 0.15s;
+  font-size: 13px; color: var(--ink-soft); padding: 8px 14px;
+  transition: background var(--dur-ui) var(--ease-out), color var(--dur-ui) var(--ease-out), transform var(--dur-press) var(--ease-out);
 }
+.axis-toggle button:active { transform: scale(0.97); }
 .axis-toggle button + button { border-left: 1px solid var(--line); }
 .axis-toggle button[aria-pressed="true"] { background: var(--accent); color: #fff; }
 
@@ -180,8 +210,10 @@ button.mbar:hover, button.mbar:active { border-color: var(--line-strong); backgr
 .crumbs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   font-size: 14px; color: var(--ink-soft); margin: 0 0 16px; min-height: 24px; }
 .crumb { background: none; border: 0; padding: 0; font: inherit; color: var(--accent);
-  cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-.crumb:hover { text-decoration: underline; }
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  transition: transform var(--dur-press) var(--ease-out); }
+.crumb:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) { .crumb:hover { text-decoration: underline; } }
 .crumb.is-current { color: var(--ink); cursor: default; }
 .crumb.is-current:hover { text-decoration: none; }
 .crumb-sep { color: var(--line-strong); font-size: 12px; }
@@ -189,8 +221,12 @@ button.mbar:hover, button.mbar:active { border-color: var(--line-strong); backgr
 /* treemap */
 #treemap-wrap { position: relative; width: 100%; }
 #treemap { width: 100%; display: block; }
-.tile { cursor: pointer; transition: opacity 0.15s; }
-.tile:hover { opacity: 0.88; }
+.tile { cursor: pointer; transition: opacity var(--dur-ui) var(--ease-out); }
+.tile rect { transition: stroke-width var(--dur-ui) var(--ease-out); }
+@media (hover: hover) and (pointer: fine) {
+  .tile:hover { opacity: 1; }
+  .tile:hover rect { stroke-width: 2.5; }
+}
 .tile-label { font-size: 13px; font-weight: 400; pointer-events: none; }
 .tile-value { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; pointer-events: none; }
 .tile-sub { font-size: 11px; pointer-events: none; }
@@ -199,8 +235,8 @@ button.mbar:hover, button.mbar:active { border-color: var(--line-strong); backgr
 .tt {
   position: fixed; pointer-events: none; z-index: 50;
   background: var(--ink); color: var(--bg); padding: 10px 12px; border-radius: 8px;
-  font-size: 13px; line-height: 1.45; max-width: 280px; opacity: 0; transition: opacity 0.12s;
-  box-shadow: 0 4px 18px rgba(0,0,0,0.18);
+  font-size: 13px; line-height: 1.45; max-width: 280px; opacity: 0; transition: opacity 0.12s var(--ease-out);
+  box-shadow: var(--shadow-pop);
 }
 .tt strong { font-weight: 600; }
 .tt .tt-val { font-variant-numeric: tabular-nums; }
@@ -212,8 +248,8 @@ button.mbar:hover, button.mbar:active { border-color: var(--line-strong); backgr
 .snode rect { cursor: default; }
 .slabel { font-size: 12px; fill: var(--ink); }
 .svalue { font-size: 11px; fill: var(--ink-faint); font-variant-numeric: tabular-nums; }
-.slink { fill: none; transition: stroke-opacity 0.15s; }
-.slink:hover { stroke-opacity: 0.55 !important; }
+.slink { fill: none; transition: stroke-opacity var(--dur-ui) var(--ease-out); }
+@media (hover: hover) and (pointer: fine) { .slink:hover { stroke-opacity: 0.55 !important; } }
 
 /* type-breakdown bars */
 .types { display: grid; gap: 14px; margin-top: 8px; }
@@ -236,13 +272,13 @@ button.mbar:hover, button.mbar:active { border-color: var(--line-strong); backgr
 .foot .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
   font-size: 13px; color: var(--ink-faint); }
 .foot a { color: var(--accent); text-decoration: none; }
-.foot a:hover { text-decoration: underline; }
+@media (hover: hover) and (pointer: fine) { .foot a:hover { text-decoration: underline; } }
 
 /* ---------- Loading / error ---------- */
 .state { padding: 80px 0; text-align: center; color: var(--ink-faint); }
 .state .spinner { width: 28px; height: 28px; border: 3px solid var(--line);
   border-top-color: var(--accent); border-radius: 50%; margin: 0 auto 16px;
-  animation: spin 0.8s linear infinite; }
+  animation: spin 0.6s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -261,8 +297,53 @@ button.mbar:hover, button.mbar:active { border-color: var(--line-strong); backgr
   .tab { padding: 8px 12px; font-size: 13px; }
 }
 
+/* ---------- Entrance motion (first load) ---------- */
+/* Elements tagged .anim-in start offset+transparent; .is-loaded on <body> releases
+   them with a staggered delay. Only transform+opacity — GPU-friendly. */
+.anim-in {
+  opacity: 0;
+  transform: translateY(10px);
+}
+body.is-loaded .anim-in {
+  opacity: 1;
+  transform: none;
+  transition: opacity var(--dur-enter) var(--ease-out), transform var(--dur-enter) var(--ease-out);
+  transition-delay: var(--anim-delay, 0ms);
+}
+
+/* Tab/view panel fade-in on activation */
+.panel.fade-in { animation: panelIn var(--dur-ui) var(--ease-out) both; }
+@keyframes panelIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Year-change crossfade: blur masks the imperfect data swap */
+.chart-swap { transition: opacity 150ms var(--ease-out), filter 150ms var(--ease-out); will-change: opacity, filter; }
+.chart-swap.is-swapping { opacity: 0; filter: blur(2px); }
+
+/* Mobile/type bar fills grow in from the left, staggered by row */
+.mbar-fill, .type-bar-fill { transform-origin: left center; }
+.mbar-fill.grow-in, .type-bar-fill.grow-in {
+  animation: barGrow var(--dur-enter) var(--ease-out) both;
+  animation-delay: var(--anim-delay, 0ms);
+}
+@keyframes barGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
 @media (prefers-reduced-motion: reduce) {
-  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  /* Reduced ≠ zero: keep opacity/color fades, drop movement and infinite motion. */
+  *, *::before, *::after {
+    animation-iteration-count: 1 !important;
+  }
+  .anim-in { transform: none !important; }
+  body.is-loaded .anim-in { transition: opacity var(--dur-ui) var(--ease-out); }
+  .panel.fade-in { animation: none !important; }
+  .mbar-fill.grow-in, .type-bar-fill.grow-in { animation: none !important; }
+  .chart-swap { transition: opacity 120ms var(--ease-out); }
+  .chart-swap.is-swapping { filter: none; }
+  .tab:active, .year-bar-buttons button:active, .axis-toggle button:active,
+  .crumb:active, button.mbar:active { transform: none !important; }
+  .spinner { animation: spin 1.2s linear infinite !important; }
 }
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
