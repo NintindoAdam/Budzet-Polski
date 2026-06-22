@@ -73,8 +73,6 @@
   }
 
   // ---------- bootstrap ----------
-  var TRENDS = null;          // trends-data.json (lazy-loaded on first Trendy view)
-  var trendsLoading = false;
 
   fetch("budget-data.json")
     .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
@@ -637,322 +635,16 @@
     }).join("");
   }
 
-  // ---------- TRENDS dashboard ----------
-  function drawTrends() {
-    if (TRENDS) { renderTrends(); return; }
-    if (trendsLoading) return;
-    trendsLoading = true;
-    var box = document.getElementById("chart-main");
-    box.innerHTML = '<div class="state"><div class="spinner"></div>Wczytuję dane historyczne…</div>';
-    fetch("trends-data.json")
-      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-      .then(function (json) { TRENDS = json; trendsLoading = false; renderTrends(); })
-      .catch(function (err) {
-        trendsLoading = false;
-        box.innerHTML = '<div class="state"><i class="ti ti-alert-triangle"></i> Nie udało się wczytać danych historycznych.</div>';
-        console.error(err);
-      });
-  }
-
-  // format mln zł -> "XXX,X mld"
-  function mldFromMln(mln) {
-    return (mln / 1000).toLocaleString("pl-PL", { maximumFractionDigits: 1 }) + " mld";
-  }
-  function mldNum(mln) { return mln / 1000; }
-
-  function renderTrends() {
-    drawMainChart();
-    drawDebtChart();
-    drawTaxChart();
-    buildCompare();
-  }
-
-  // chart 1: income line + expense bars + deficit area
-  function drawMainChart() {
-    var box = document.getElementById("chart-main");
-    box.innerHTML = "";
-    var data = TRENDS.lata;
-    var W = box.clientWidth || 800;
-    var mobile = isMobile();
-    var H = mobile ? 360 : 420;
-    var m = { top: 20, right: mobile ? 12 : 20, bottom: 40, left: mobile ? 40 : 54 };
-    var iw = W - m.left - m.right, ih = H - m.top - m.bottom;
-
-    var svg = d3.select(box).append("svg").attr("viewBox", "0 0 " + W + " " + H).attr("width", "100%").attr("height", H);
-    var g = svg.append("g").attr("transform", "translate(" + m.left + "," + m.top + ")");
-
-    var x = d3.scaleBand().domain(data.map(function (d) { return d.rok; })).range([0, iw]).padding(0.28);
-    var maxV = d3.max(data, function (d) { return Math.max(d.wydatki, d.dochody, d.dochody_por || 0); });
-    var y = d3.scaleLinear().domain([0, maxV * 1.08]).range([ih, 0]).nice();
-
-    // gridlines + y axis
-    var ticks = y.ticks(5);
-    g.selectAll(".grid-line").data(ticks).enter().append("line")
-      .attr("class", "grid-line").attr("x1", 0).attr("x2", iw)
-      .attr("y1", function (d) { return y(d); }).attr("y2", function (d) { return y(d); });
-    g.selectAll(".axis-text-y").data(ticks).enter().append("text")
-      .attr("class", "axis-text").attr("x", -8).attr("y", function (d) { return y(d) + 4; })
-      .attr("text-anchor", "end").text(function (d) { return (d / 1000).toLocaleString("pl-PL"); });
-    g.append("text").attr("class", "axis-text").attr("x", -8).attr("y", -8).attr("text-anchor", "end").text("mld zł");
-
-    // x axis labels
-    g.selectAll(".axis-text-x").data(data).enter().append("text")
-      .attr("class", "axis-text").attr("x", function (d) { return x(d.rok) + x.bandwidth() / 2; })
-      .attr("y", ih + 22).attr("text-anchor", "middle")
-      .text(function (d) { return d.rok; });
-    g.selectAll(".tag-plan").data(data.filter(function (d) { return d.typ === "plan"; })).enter().append("text")
-      .attr("class", "year-tag-plan").attr("x", function (d) { return x(d.rok) + x.bandwidth() / 2; })
-      .attr("y", ih + 34).attr("text-anchor", "middle").text("plan");
-    g.selectAll(".tag-exec").data(data.filter(function (d) { return d.typ.indexOf("szac") >= 0; })).enter().append("text")
-      .attr("class", "year-tag-plan").attr("x", function (d) { return x(d.rok) + x.bandwidth() / 2; })
-      .attr("y", ih + 34).attr("text-anchor", "middle").attr("fill", "var(--ink-faint)").text("szac.");
-
-    // deficit area (between income and expense)
-    var areaGen = d3.area()
-      .x(function (d) { return x(d.rok) + x.bandwidth() / 2; })
-      .y0(function (d) { return y(d.dochody); })
-      .y1(function (d) { return y(d.wydatki); })
-      .curve(d3.curveMonotoneX);
-    g.append("path").datum(data).attr("class", "deficit-area").attr("d", areaGen);
-
-    // expense bars
-    g.selectAll(".bar-expense").data(data).enter().append("rect")
-      .attr("class", function (d) { return "bar-expense" + (d.typ === "plan" ? " bar-plan" : ""); })
-      .attr("x", function (d) { return x(d.rok); }).attr("width", x.bandwidth())
-      .attr("y", function (d) { return y(d.wydatki); }).attr("height", function (d) { return ih - y(d.wydatki); })
-      .attr("rx", 3)
-      .append("title").text(function (d) { return d.rok + " wydatki: " + mldFromMln(d.wydatki) + " zł"; });
-
-    // expense value labels
-    g.selectAll(".bar-label").data(data).enter().append("text")
-      .attr("class", "bar-label").attr("x", function (d) { return x(d.rok) + x.bandwidth() / 2; })
-      .attr("y", function (d) { return y(d.wydatki) - 6; }).attr("text-anchor", "middle")
-      .style("font-size", mobile ? "9px" : "11px")
-      .text(function (d) { return (d.wydatki / 1000).toFixed(0); });
-
-    // comparable income (dashed) where present
-    var compData = data.filter(function (d) { return d.dochody_por; });
-    if (compData.length) {
-      // build a line that uses dochody_por where present, else dochody, only across the segment that has comparables + neighbors
-      var lineComp = d3.line()
-        .x(function (d) { return x(d.rok) + x.bandwidth() / 2; })
-        .y(function (d) { return y(d.dochody_por || d.dochody); })
-        .curve(d3.curveMonotoneX);
-      // segment: from first comparable-1 to last year
-      var idx = data.findIndex(function (d) { return d.dochody_por; });
-      var seg = data.slice(Math.max(0, idx - 1));
-      g.append("path").datum(seg).attr("class", "line-income-comp").attr("d", lineComp);
-      g.selectAll(".dot-comp").data(compData).enter().append("circle")
-        .attr("class", "dot-income").attr("opacity", 0.6)
-        .attr("cx", function (d) { return x(d.rok) + x.bandwidth() / 2; })
-        .attr("cy", function (d) { return y(d.dochody_por); }).attr("r", 3)
-        .append("title").text(function (d) { return d.rok + " dochody porównywalne: " + mldFromMln(d.dochody_por) + " zł"; });
-    }
-
-    // income line (solid)
-    var lineGen = d3.line()
-      .x(function (d) { return x(d.rok) + x.bandwidth() / 2; })
-      .y(function (d) { return y(d.dochody); }).curve(d3.curveMonotoneX);
-    g.append("path").datum(data).attr("class", "line-income").attr("d", lineGen);
-    g.selectAll(".dot-income").data(data).enter().append("circle")
-      .attr("class", "dot-income").attr("cx", function (d) { return x(d.rok) + x.bandwidth() / 2; })
-      .attr("cy", function (d) { return y(d.dochody); }).attr("r", 4)
-      .append("title").text(function (d) { return d.rok + " dochody: " + mldFromMln(d.dochody) + " zł"; });
-
-    // legend
-    document.getElementById("legend-main").innerHTML =
-      '<span class="legend-item"><span class="legend-swatch" style="background:var(--c-defense);border:1px solid var(--c-defense-line)"></span>Wydatki</span>' +
-      '<span class="legend-item"><span class="legend-swatch" style="background:var(--c-transfer-line)"></span>Dochody</span>' +
-      '<span class="legend-item"><span class="legend-swatch" style="background:var(--c-transfer-line);opacity:.6"></span>Dochody porównywalne (bez reformy JST)</span>' +
-      '<span class="legend-item"><span class="legend-swatch" style="background:var(--danger);opacity:.18"></span>Deficyt</span>';
-  }
-
-  // chart 2: debt/GDP lines
-  function drawDebtChart() {
-    var box = document.getElementById("chart-debt");
-    box.innerHTML = "";
-    var data = TRENDS.lata;
-    var W = box.clientWidth || 800;
-    var mobile = isMobile();
-    var H = mobile ? 300 : 340;
-    var m = { top: 20, right: mobile ? 12 : 20, bottom: 40, left: mobile ? 36 : 48 };
-    var iw = W - m.left - m.right, ih = H - m.top - m.bottom;
-
-    var svg = d3.select(box).append("svg").attr("viewBox", "0 0 " + W + " " + H).attr("width", "100%").attr("height", H);
-    var g = svg.append("g").attr("transform", "translate(" + m.left + "," + m.top + ")");
-
-    var x = d3.scalePoint().domain(data.map(function (d) { return d.rok; })).range([0, iw]).padding(0.5);
-    var y = d3.scaleLinear().domain([0, 70]).range([ih, 0]);
-
-    var ticks = [0, 20, 40, 55, 60];
-    g.selectAll(".grid-line").data(ticks).enter().append("line")
-      .attr("class", function (d) { return (d === 55 || d === 60) ? "threshold-line" : "grid-line"; })
-      .attr("x1", 0).attr("x2", iw).attr("y1", function (d) { return y(d); }).attr("y2", function (d) { return y(d); });
-    g.selectAll(".axis-text-y").data([0, 20, 40, 60]).enter().append("text")
-      .attr("class", "axis-text").attr("x", -8).attr("y", function (d) { return y(d) + 4; })
-      .attr("text-anchor", "end").text(function (d) { return d + "%"; });
-    g.append("text").attr("class", "threshold-text").attr("x", iw).attr("y", y(55) + 12).attr("text-anchor", "end").text("próg 55%");
-    g.append("text").attr("class", "threshold-text").attr("x", iw).attr("y", y(60) - 5).attr("text-anchor", "end").text("próg UE 60%");
-
-    g.selectAll(".axis-text-x").data(data).enter().append("text")
-      .attr("class", "axis-text").attr("x", function (d) { return x(d.rok); }).attr("y", ih + 22)
-      .attr("text-anchor", "middle").text(function (d) { return d.rok; });
-
-    function drawSeries(key, cls, label) {
-      var pts = data.filter(function (d) { return d[key] != null; });
-      var ln = d3.line().x(function (d) { return x(d.rok); }).y(function (d) { return y(d[key]); }).curve(d3.curveMonotoneX);
-      g.append("path").datum(pts).attr("class", cls).attr("d", ln);
-      g.selectAll(".dot-" + key).data(pts).enter().append("circle")
-        .attr("cx", function (d) { return x(d.rok); }).attr("cy", function (d) { return y(d[key]); }).attr("r", 3.5)
-        .attr("fill", cls === "line-debt-pdp" ? "var(--c-admin-line)" : "var(--c-debt-line)")
-        .append("title").text(function (d) { return d.rok + " " + label + ": " + d[key] + "% PKB"; });
-      // value labels
-      g.selectAll(".lbl-" + key).data(pts).enter().append("text")
-        .attr("class", "axis-text").attr("x", function (d) { return x(d.rok); })
-        .attr("y", function (d) { return y(d[key]) - 8; }).attr("text-anchor", "middle")
-        .style("font-size", "10px").attr("fill", cls === "line-debt-pdp" ? "var(--c-admin-ink)" : "var(--c-debt-ink)")
-        .text(function (d) { return d[key].toLocaleString("pl-PL", { minimumFractionDigits: 1 }) + "%"; });
-    }
-    drawSeries("gg_pkb", "line-debt-gg", "dług GG (UE)");
-    drawSeries("pdp_pkb", "line-debt-pdp", "dług publiczny (krajowy)");
-
-    box.insertAdjacentHTML("afterend", "");
-    document.getElementById("legend-main"); // noop guard
-    var legHtml =
-      '<span class="legend-item"><span class="legend-swatch" style="background:var(--c-admin-line)"></span>Państwowy dług publiczny (def. krajowa)</span>' +
-      '<span class="legend-item"><span class="legend-swatch" style="background:var(--c-debt-line)"></span>Dług sektora GG (def. UE)</span>';
-    var existing = document.getElementById("legend-debt");
-    if (!existing) {
-      existing = document.createElement("div");
-      existing.id = "legend-debt"; existing.className = "legend"; existing.style.marginTop = "12px";
-      box.parentNode.insertBefore(existing, box.nextSibling);
-    }
-    existing.innerHTML = legHtml;
-  }
-
-  // chart 3: stacked tax bars
-  function drawTaxChart() {
-    var box = document.getElementById("chart-tax");
-    box.innerHTML = "";
-    var data = TRENDS.lata;
-    var keys = ["VAT", "akcyza", "PIT", "CIT"];
-    var colors = { VAT: "var(--c-social-line)", akcyza: "var(--c-debt-line)", PIT: "var(--c-edu-line)", CIT: "var(--c-admin-line)" };
-    var W = box.clientWidth || 800;
-    var mobile = isMobile();
-    var H = mobile ? 320 : 380;
-    var m = { top: 20, right: mobile ? 12 : 20, bottom: 40, left: mobile ? 40 : 54 };
-    var iw = W - m.left - m.right, ih = H - m.top - m.bottom;
-
-    var svg = d3.select(box).append("svg").attr("viewBox", "0 0 " + W + " " + H).attr("width", "100%").attr("height", H);
-    var g = svg.append("g").attr("transform", "translate(" + m.left + "," + m.top + ")");
-
-    var x = d3.scaleBand().domain(data.map(function (d) { return d.rok; })).range([0, iw]).padding(0.3);
-    var maxV = d3.max(data, function (d) {
-      return keys.reduce(function (s, k) { return s + (d.podatki[k] || 0); }, 0);
-    });
-    var y = d3.scaleLinear().domain([0, maxV * 1.08]).range([ih, 0]).nice();
-
-    var ticks = y.ticks(5);
-    g.selectAll(".grid-line").data(ticks).enter().append("line")
-      .attr("class", "grid-line").attr("x1", 0).attr("x2", iw)
-      .attr("y1", function (d) { return y(d); }).attr("y2", function (d) { return y(d); });
-    g.selectAll(".axis-text-y").data(ticks).enter().append("text")
-      .attr("class", "axis-text").attr("x", -8).attr("y", function (d) { return y(d) + 4; })
-      .attr("text-anchor", "end").text(function (d) { return (d / 1000).toLocaleString("pl-PL"); });
-    g.append("text").attr("class", "axis-text").attr("x", -8).attr("y", -8).attr("text-anchor", "end").text("mld zł");
-
-    g.selectAll(".axis-text-x").data(data).enter().append("text")
-      .attr("class", "axis-text").attr("x", function (d) { return x(d.rok) + x.bandwidth() / 2; })
-      .attr("y", ih + 22).attr("text-anchor", "middle").text(function (d) { return d.rok; });
-
-    data.forEach(function (d) {
-      var acc = 0;
-      keys.forEach(function (k) {
-        var v = d.podatki[k];
-        if (!v) return;
-        g.append("rect").attr("x", x(d.rok)).attr("width", x.bandwidth())
-          .attr("y", y(acc + v)).attr("height", y(acc) - y(acc + v))
-          .attr("fill", colors[k]).attr("opacity", d.typ === "plan" ? 0.6 : 1).attr("rx", 1)
-          .append("title").text(d.rok + " " + k + ": " + mldFromMln(v) + " zł");
-        acc += v;
-      });
-      // "brak danych" note where no breakdown
-      var hasAny = keys.some(function (k) { return d.podatki[k]; });
-      if (!hasAny) {
-        g.append("text").attr("class", "axis-text").attr("x", x(d.rok) + x.bandwidth() / 2)
-          .attr("y", ih - 8).attr("text-anchor", "middle").style("font-size", "9px")
-          .attr("fill", "var(--ink-faint)").attr("transform", "rotate(-90," + (x(d.rok) + x.bandwidth() / 2) + "," + (ih - 8) + ")")
-          .text("brak rozbicia");
-      }
-    });
-
-    document.getElementById("legend-tax").innerHTML = keys.map(function (k) {
-      return '<span class="legend-item"><span class="legend-swatch" style="background:' + colors[k] + '"></span>' + k + '</span>';
-    }).join("");
-  }
-
-  // compare two years
-  function buildCompare() {
-    var data = TRENDS.lata;
-    var ctrl = document.getElementById("compare-controls");
-    var years = data.map(function (d) { return d.rok; });
-    function opts(sel) {
-      return years.map(function (yr) { return '<option value="' + yr + '"' + (yr === sel ? " selected" : "") + '>' + yr + '</option>'; }).join("");
-    }
-    ctrl.innerHTML =
-      '<div class="compare-field"><label for="cmp-a">Rok bazowy</label><select id="cmp-a">' + opts(2022) + '</select></div>' +
-      '<span class="compare-arrow"><i class="ti ti-arrow-right"></i></span>' +
-      '<div class="compare-field"><label for="cmp-b">Rok porównywany</label><select id="cmp-b">' + opts(2026) + '</select></div>';
-    var a = document.getElementById("cmp-a"), b = document.getElementById("cmp-b");
-    function upd() { renderCompare(parseInt(a.value, 10), parseInt(b.value, 10)); }
-    a.addEventListener("change", upd); b.addEventListener("change", upd);
-    upd();
-  }
-
-  function renderCompare(yA, yB) {
-    var data = TRENDS.lata;
-    var A = data.find(function (d) { return d.rok === yA; });
-    var B = data.find(function (d) { return d.rok === yB; });
-    var grid = document.getElementById("compare-grid");
-    if (!A || !B) { grid.innerHTML = ""; return; }
-
-    function cell(label, va, vb, unit) {
-      var delta = vb - va;
-      var pct = va !== 0 ? (delta / Math.abs(va) * 100) : 0;
-      var up = delta > 0;
-      var arrow = up ? "↑" : (delta < 0 ? "↓" : "→");
-      var cls = up ? "cc-up" : "cc-down";
-      var deltaStr = (up ? "+" : "") + (unit === "%" ? delta.toLocaleString("pl-PL", { maximumFractionDigits: 1 }) + " pkt" : mldFromMln(delta));
-      var pctStr = va !== 0 ? "(" + (up ? "+" : "") + pct.toFixed(0) + "%)" : "";
-      var vaStr = unit === "%" ? (va != null ? va.toLocaleString("pl-PL", { minimumFractionDigits: 1 }) + "%" : "—") : mldFromMln(va);
-      var vbStr = unit === "%" ? (vb != null ? vb.toLocaleString("pl-PL", { minimumFractionDigits: 1 }) + "%" : "—") : mldFromMln(vb);
-      if (va == null || vb == null) {
-        return '<div class="compare-cell"><p class="cc-label">' + label + '</p><p class="cc-values">brak danych dla wybranych lat</p></div>';
-      }
-      return '<div class="compare-cell">' +
-        '<p class="cc-label">' + label + '</p>' +
-        '<p class="cc-values">' + vaStr + ' → ' + vbStr + '</p>' +
-        '<p class="cc-delta ' + cls + '">' + arrow + ' ' + deltaStr + ' <span class="cc-delta-sub">' + pctStr + '</span></p>' +
-        '</div>';
-    }
-
-    grid.innerHTML =
-      cell("Wydatki", A.wydatki, B.wydatki) +
-      cell("Dochody", A.dochody, B.dochody) +
-      cell("Deficyt", A.deficyt, B.deficyt) +
-      cell("Dług publiczny / PKB", A.pdp_pkb, B.pdp_pkb, "%");
-  }
-
   // ---------- tabs & axis ----------
   function wireTabs() {
-    var tabs = [["tab-tree", "panel-tree", "tree"], ["tab-flow", "panel-flow", "flow"], ["tab-type", "panel-type", "type"], ["tab-trends", "panel-trends", "trends"]];
+    var tabs = [["tab-tree", "panel-tree", "tree"], ["tab-flow", "panel-flow", "flow"], ["tab-type", "panel-type", "type"]];
     tabs.forEach(function (t) {
       document.getElementById(t[0]).addEventListener("click", function () { switchView(t[2]); });
     });
   }
   function switchView(v) {
     view = v;
-    var map = { tree: ["tab-tree", "panel-tree"], flow: ["tab-flow", "panel-flow"], type: ["tab-type", "panel-type"], trends: ["tab-trends", "panel-trends"] };
+    var map = { tree: ["tab-tree", "panel-tree"], flow: ["tab-flow", "panel-flow"], type: ["tab-type", "panel-type"] };
     Object.keys(map).forEach(function (k) {
       var isSel = k === v;
       document.getElementById(map[k][0]).setAttribute("aria-selected", isSel ? "true" : "false");
@@ -960,14 +652,11 @@
       panel.classList.toggle("is-active", isSel);
       if (isSel) panel.removeAttribute("hidden"); else panel.setAttribute("hidden", "");
     });
-    // year switch: visible on all year-specific tabs (not trends). axis toggle: only treemap.
-    var ys = document.getElementById("year-switch");
-    if (ys) ys.style.display = (v === "trends") ? "none" : "inline-flex";
+    // axis toggle: only meaningful for treemap
     document.getElementById("axis-toggle").style.display = (v === "tree") ? "inline-flex" : "none";
     if (v === "tree") drawTree();
     if (v === "flow") drawSankey();
     if (v === "type") drawTypes();
-    if (v === "trends") drawTrends();
   }
 
   function wireAxis() {
@@ -1035,7 +724,6 @@
     if (view === "tree") drawTree();
     else if (view === "flow") drawSankey();
     else if (view === "type") drawTypes();
-    else if (view === "trends" && TRENDS) renderTrends();
   }
 
   // redraw active view immediately when crossing the mobile/desktop breakpoint
