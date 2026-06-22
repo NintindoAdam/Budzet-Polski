@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Budżet Polski 2026 — na co państwo wydaje pieniądze | Terra Cracovianum</title>
+<meta name="description" content="Interaktywna wizualizacja budżetu państwa polskiego na 2026 rok. Pełne dane z ustawy budżetowej (Dz.U. poz. 62) — wydatki według działów i części, z możliwością wejścia w szczegóły.">
+<meta property="og:title" content="Budżet Polski 2026 — na co państwo wydaje pieniądze">
+<meta property="og:description" content="Interaktywna wizualizacja wydatków budżetu państwa na 2026 r. Dane prosto z ustawy budżetowej.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.7.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="brand">
+      <span class="brand-mark">Terra Cracovianum</span>
+      <span class="brand-sep">·</span>
+      <span class="brand-sub">Analiza danych publicznych</span>
+    </div>
+    <div class="masthead-meta">Ustawa budżetowa · Dz.U. 2026 poz. 62</div>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <p class="eyebrow">Budżet państwa · rok 2026</p>
+      <h1>Państwo polskie wyda <span class="amt">918,9&nbsp;mld&nbsp;zł</span>. Zobacz na co.</h1>
+      <p class="hero-lead">Każda złotówka z ustawy budżetowej, rozłożona na czynniki pierwsze. Wielkość pola odpowiada kwocie — kliknij, żeby wejść głębiej. Dane pochodzą wprost z ustawy budżetowej na rok 2026 i sumują się co do tysiąca złotych.</p>
+
+      <div class="stats" id="stats" aria-label="Kluczowe wielkości budżetu">
+        <!-- filled by JS -->
+      </div>
+      <p class="stat-foot" style="margin-top:10px">Kwoty w tysiącach złotych przeliczane na mld dla czytelności. Relacja długu i wydatków na obronę do PKB — wg uzasadnienia do ustawy.</p>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <div class="controls">
+      <div class="tabs" role="tablist" aria-label="Widok danych">
+        <button class="tab" role="tab" id="tab-tree" aria-selected="true" aria-controls="panel-tree">
+          <i class="ti ti-layout-grid" aria-hidden="true"></i> Mapa wydatków
+        </button>
+        <button class="tab" role="tab" id="tab-flow" aria-selected="false" aria-controls="panel-flow">
+          <i class="ti ti-arrows-split" aria-hidden="true"></i> Przepływ
+        </button>
+        <button class="tab" role="tab" id="tab-type" aria-selected="false" aria-controls="panel-type">
+          <i class="ti ti-chart-bar" aria-hidden="true"></i> Rodzaj wydatku
+        </button>
+      </div>
+
+      <div class="axis-toggle" id="axis-toggle">
+        <span>Podział wg:</span>
+        <span class="seg">
+          <button id="axis-dzialy" aria-pressed="true">na co (działy)</button>
+          <button id="axis-czesci" aria-pressed="false">kto wydaje (części)</button>
+        </span>
+      </div>
+    </div>
+
+    <!-- TREEMAP -->
+    <div class="panel is-active" id="panel-tree" role="tabpanel" aria-labelledby="tab-tree">
+      <div class="crumbs" id="crumbs"></div>
+      <div id="treemap-wrap">
+        <div class="state" id="tree-state"><div class="spinner"></div>Wczytuję dane budżetu…</div>
+        <svg id="treemap" role="img" aria-label="Mapa wydatków budżetu — pola proporcjonalne do kwot"></svg>
+      </div>
+      <div class="legend" id="legend"></div>
+      <p class="hint"><i class="ti ti-pointer" aria-hidden="true"></i> Kliknij pole, aby wejść w szczegóły. Kliknij ścieżkę powyżej, aby wrócić.</p>
+    </div>
+
+    <!-- SANKEY -->
+    <div class="panel" id="panel-flow" role="tabpanel" aria-labelledby="tab-flow" hidden>
+      <p style="color:var(--ink-soft); max-width:62ch; margin:0 0 8px;">Skąd pochodzą pieniądze i dokąd płyną. Po lewej źródła dochodów, po prawej największe obszary wydatków. Czerwony strumień to deficyt — wydatki niepokryte dochodami.</p>
+      <div id="sankey-wrap">
+        <svg id="sankey" role="img" aria-label="Diagram przepływu: dochody budżetu do kategorii wydatków"></svg>
+      </div>
+    </div>
+
+    <!-- TYPE BREAKDOWN -->
+    <div class="panel" id="panel-type" role="tabpanel" aria-labelledby="tab-type" hidden>
+      <p style="color:var(--ink-soft); max-width:62ch; margin:0 0 20px;">Te same pieniądze, ale wg <em>rodzaju</em> wydatku — ile trafia bezpośrednio do ludzi jako świadczenia, ile to inwestycje, ile bieżące utrzymanie państwa, a ile obsługa długu.</p>
+      <div class="types" id="types"></div>
+      <p class="hint"><i class="ti ti-info-circle" aria-hidden="true"></i> Podział wg kolumn ustawy budżetowej (zestawienie zbiorcze według działów).</p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <span>Źródło: Ustawa budżetowa na rok 2026 z dnia 9 stycznia 2026 r. (Dz.U. poz. 62). Dane: załącznik nr 2 — wydatki budżetu państwa.</span>
+    <span><a href="https://terracracovianum.org">terracracovianum.org</a></span>
+  </div>
+</footer>
+
+<div class="tt" id="tooltip" role="status" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
