@@ -1,0 +1,99 @@
+{
+ "meta": {
+  "jednostka": "mln zł",
+  "zrodlo": "Ministerstwo Finansów — sprawozdania roczne z wykonania budżetu państwa (2022–2024), szacunkowe wykonanie (2025), ustawa budżetowa (plan 2026)",
+  "uwaga_globalna": "Lata 2022–2025: wykonanie. 2026: plan z ustawy. Od 2025 reforma finansowania JST zmienia porównywalność dochodów (więcej PIT/CIT trafia wprost do samorządów)."
+ },
+ "lata": [
+  {
+   "rok": 2022,
+   "typ": "wykonanie",
+   "dochody": 504820.8,
+   "wydatki": 517398.9,
+   "deficyt": 12578.1,
+   "podatki": {
+    "VAT": 230408.0,
+    "akcyza": 79788.0,
+    "PIT": null,
+    "CIT": null
+   },
+   "pdp_pkb": 39.3,
+   "gg_pkb": 49.2,
+   "deficyt_gg_pkb": 3.4,
+   "dochody_por": null,
+   "uwaga": "Niski deficyt BP — duża część operacji przez fundusze pozabudżetowe (BGK/PFR). Deficyt sektora GG wg UE znacznie wyższy."
+  },
+  {
+   "rok": 2023,
+   "typ": "wykonanie",
+   "dochody": 573957.9,
+   "wydatki": 659586.5,
+   "deficyt": 85628.6,
+   "podatki": {
+    "VAT": 244300.0,
+    "akcyza": 84800.0,
+    "PIT": 91700.0,
+    "CIT": null
+   },
+   "pdp_pkb": 38.9,
+   "gg_pkb": 49.6,
+   "deficyt_gg_pkb": 5.1,
+   "dochody_por": null,
+   "uwaga": "Wydatki skok +27,5% r/r. Obsługa długu ~62 mld (prawie 2× vs 2022)."
+  },
+  {
+   "rok": 2024,
+   "typ": "wykonanie",
+   "dochody": 623239.8,
+   "wydatki": 834242.5,
+   "deficyt": 211002.7,
+   "podatki": {
+    "VAT": null,
+    "akcyza": null,
+    "PIT": null,
+    "CIT": null
+   },
+   "pdp_pkb": 44.3,
+   "gg_pkb": 55.3,
+   "deficyt_gg_pkb": 6.5,
+   "dochody_por": null,
+   "uwaga": "Pierwszy rok 13./14. emerytury w deficycie BP. 800+ (z 500+), podwyżki nauczycieli. Procedura nadmiernego deficytu UE."
+  },
+  {
+   "rok": 2025,
+   "typ": "wykonanie szac.",
+   "dochody": 594562.8,
+   "wydatki": 870190.6,
+   "deficyt": 275627.8,
+   "podatki": {
+    "VAT": null,
+    "akcyza": null,
+    "PIT": null,
+    "CIT": null
+   },
+   "pdp_pkb": null,
+   "gg_pkb": null,
+   "deficyt_gg_pkb": null,
+   "dochody_por": 697000.0,
+   "uwaga": "Reforma JST: część PIT/CIT trafia wprost do samorządów. Dochody BP formalnie spadły, ale 'porównywalnie' ~697 mld."
+  },
+  {
+   "rok": 2026,
+   "typ": "plan",
+   "dochody": 647200.0,
+   "wydatki": 918940.0,
+   "deficyt": 271740.0,
+   "podatki": {
+    "VAT": 341500.0,
+    "akcyza": 103300.0,
+    "PIT": 32000.0,
+    "CIT": 80400.0
+   },
+   "pdp_pkb": 53.8,
+   "gg_pkb": 66.2,
+   "deficyt_gg_pkb": null,
+   "dochody_por": null,
+   "uwaga": "Plan z ustawy budżetowej (Dz.U. 2026 poz. 62), nie wykonanie. Dług GG wg UE prognozowany >60%."
+  }
+ ]
+}
