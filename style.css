@@ -191,7 +191,11 @@ button.mbar:hover, button.mbar:active { border-color: var(--line-strong); backgr
 .tab[aria-selected="true"] { background: var(--ink); color: var(--bg); }
 .tab i { font-size: 16px; }
 
-.axis-toggle { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-soft); }
+.control-right { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.axis-toggle { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-soft); flex-wrap: wrap; }
+.year-switch { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-soft); }
+.year-switch-label { color: var(--ink-soft); }
+#year-seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
 .axis-toggle .seg { display: flex; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .axis-toggle button {
   appearance: none; border: 0; background: var(--surface); cursor: pointer; font: inherit;

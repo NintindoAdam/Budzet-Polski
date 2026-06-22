@@ -5,6 +5,9 @@
   "use strict";
 
   var DATA = null;
+  var YEAR = 2026;                  // currently displayed year
+  var YEAR_CACHE = {};              // year -> data json
+  var YEAR_FILES = { 2026: "budget-data.json", 2025: "budget-2025.json" };
   var axis = "dzialy";        // "dzialy" | "czesci"
   var view = "tree";          // "tree" | "flow" | "type"
   var path = [];              // drill-down stack of node objects
@@ -77,11 +80,14 @@
     .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
     .then(function (json) {
       DATA = json;
+      YEAR = (json.meta && json.meta.rok) || 2026;
+      YEAR_CACHE[YEAR] = json;
       renderStats();
       buildLegend();
       drawTree();
       wireTabs();
       wireAxis();
+      wireYear();
       window.addEventListener("resize", debounce(onResize, 150));
     })
     .catch(function (err) {
@@ -93,12 +99,19 @@
   // ---------- stats band ----------
   function renderStats() {
     var m = DATA.meta;
+    var yr = m.rok || YEAR;
     var cards = [
-      { label: "Wydatki", value: money(m.wydatki), foot: "Plan na 2026 r.", danger: false },
+      { label: "Wydatki", value: money(m.wydatki), foot: "Plan na " + yr + " r.", danger: false },
       { label: "Dochody", value: money(m.dochody), foot: "Wpływy podatkowe i niepodatkowe", danger: false },
-      { label: "Deficyt", value: money(m.deficyt), foot: "Wydatki minus dochody", danger: true },
-      { label: "Dług / PKB", value: m.dlug_pkb_proc.toLocaleString("pl-PL", { minimumFractionDigits: 1 }) + "%", foot: "Próg ostrożnościowy: 55%", danger: false }
+      { label: "Deficyt", value: money(m.deficyt), foot: "Wydatki minus dochody", danger: true }
     ];
+    if (m.dlug_pkb_proc != null) {
+      cards.push({ label: "Dług / PKB", value: m.dlug_pkb_proc.toLocaleString("pl-PL", { minimumFractionDigits: 1 }) + "%", foot: "Próg ostrożnościowy: 55%", danger: false });
+    } else {
+      // 2025 plan: show share of expenses covered by income instead
+      var cover = (m.dochody / m.wydatki * 100);
+      cards.push({ label: "Pokrycie wydatków", value: cover.toFixed(0) + "%", foot: "Dochody / wydatki", danger: false });
+    }
     var html = cards.map(function (c) {
       var parts = c.value.split(" ");
       var num = parts.shift();
@@ -110,6 +123,16 @@
         '<p class="stat-foot">' + c.foot + '</p></div>';
     }).join("");
     document.getElementById("stats").innerHTML = html;
+
+    // update hero headline amount + year
+    var heroAmt = document.querySelector(".hero h1 .amt");
+    if (heroAmt) heroAmt.textContent = money(m.wydatki).replace(/ /g, "\u00a0");
+    var eyebrow = document.querySelector(".hero .eyebrow");
+    if (eyebrow) eyebrow.textContent = "Budżet państwa · rok " + yr;
+    var lead = document.getElementById("hero-lead");
+    if (lead) lead.textContent = "Każda złotówka z ustawy budżetowej, rozłożona na czynniki pierwsze. Wielkość pola odpowiada kwocie — kliknij, żeby wejść głębiej. Dane pochodzą wprost z ustawy budżetowej na rok " + yr + " i sumują się co do tysiąca złotych.";
+    var mast = document.getElementById("masthead-meta");
+    if (mast && m.ustawa) mast.textContent = m.ustawa;
   }
 
   // ---------- legend ----------
@@ -580,18 +603,23 @@
   }
 
   // ---------- type breakdown ----------
-  // Type composition from the law's columns. Aggregated to national shares.
+  function typeColorKey(name) {
+    var n = name.toLowerCase();
+    if (/świadcz/.test(n)) return "social";
+    if (/bieżąc/.test(n)) return "admin";
+    if (/dotacj|subwencj/.test(n)) return "transfer";
+    if (/majątk|inwestyc/.test(n)) return "infra";
+    if (/dług/.test(n)) return "debt";
+    if (/własne ue|środki własne/.test(n)) return "edu";
+    if (/współfinans|projekt/.test(n)) return "health";
+    return "other";
+  }
   function drawTypes() {
-    // National type split (tys. zł) — from annex 2 "Ogółem" row:
-    var types = [
-      { name: "Świadczenia dla osób fizycznych", key: "social", value: 162486885 },
-      { name: "Wydatki bieżące jednostek", key: "admin", value: 185554371 },
-      { name: "Dotacje i subwencje", key: "transfer", value: 351210029 },
-      { name: "Wydatki majątkowe (inwestycje)", key: "infra", value: 73027267 },
-      { name: "Obsługa długu Skarbu Państwa", key: "debt", value: 90000000 },
-      { name: "Środki własne UE", key: "edu", value: 41585044 },
-      { name: "Współfinansowanie projektów UE", key: "health", value: 15076404 }
-    ];
+    var src = (DATA && DATA.typy) ? DATA.typy : [];
+    var types = src.map(function (t) {
+      return { name: t.name, key: typeColorKey(t.name), value: t.plan };
+    });
+    if (!types.length) { document.getElementById("types").innerHTML = '<p style="color:var(--ink-faint)">Brak danych o rodzaju wydatku dla tego roku.</p>'; return; }
     var total = d3.sum(types, function (t) { return t.value; });
     var max = d3.max(types, function (t) { return t.value; });
     types.sort(function (a, b) { return b.value - a.value; });
@@ -932,8 +960,10 @@
       panel.classList.toggle("is-active", isSel);
       if (isSel) panel.removeAttribute("hidden"); else panel.setAttribute("hidden", "");
     });
-    // axis toggle only meaningful for treemap
-    document.getElementById("axis-toggle").style.visibility = (v === "tree") ? "visible" : "hidden";
+    // year switch: visible on all year-specific tabs (not trends). axis toggle: only treemap.
+    var ys = document.getElementById("year-switch");
+    if (ys) ys.style.display = (v === "trends") ? "none" : "inline-flex";
+    document.getElementById("axis-toggle").style.display = (v === "tree") ? "inline-flex" : "none";
     if (v === "tree") drawTree();
     if (v === "flow") drawSankey();
     if (v === "type") drawTypes();
@@ -943,6 +973,53 @@
   function wireAxis() {
     document.getElementById("axis-dzialy").addEventListener("click", function () { setAxis("dzialy"); });
     document.getElementById("axis-czesci").addEventListener("click", function () { setAxis("czesci"); });
+  }
+
+  function wireYear() {
+    var seg = document.getElementById("year-seg");
+    if (!seg) return;
+    seg.querySelectorAll("button").forEach(function (btn) {
+      btn.addEventListener("click", function () { setYear(parseInt(btn.getAttribute("data-year"), 10)); });
+    });
+  }
+
+  function setYear(yr) {
+    if (yr === YEAR) return;
+    // reflect pressed state
+    document.querySelectorAll("#year-seg button").forEach(function (b) {
+      b.setAttribute("aria-pressed", parseInt(b.getAttribute("data-year"), 10) === yr ? "true" : "false");
+    });
+    path = [];
+    restExpanded = false;
+
+    function apply(json) {
+      DATA = json;
+      YEAR = yr;
+      renderStats();
+      // re-render whichever year-specific view is active
+      if (view === "tree") drawTree();
+      else if (view === "flow") drawSankey();
+      else if (view === "type") drawTypes();
+    }
+
+    if (YEAR_CACHE[yr]) { apply(YEAR_CACHE[yr]); return; }
+
+    // lazy-load the year's file
+    var file = YEAR_FILES[yr];
+    if (!file) return;
+    // show a quick loading hint on the treemap if that's the active view
+    if (view === "tree") {
+      var st = document.getElementById("tree-state");
+      if (st) { st.style.display = "block"; st.innerHTML = '<div class="spinner"></div>Wczytuję budżet ' + yr + '…'; }
+    }
+    fetch(file)
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (json) { YEAR_CACHE[yr] = json; apply(json); })
+      .catch(function (err) {
+        console.error(err);
+        var st2 = document.getElementById("tree-state");
+        if (st2) st2.innerHTML = '<i class="ti ti-alert-triangle"></i> Nie udało się wczytać budżetu ' + yr + '.';
+      });
   }
   function setAxis(a) {
     if (axis === a) return;
