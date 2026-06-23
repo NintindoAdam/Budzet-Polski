@@ -365,6 +365,8 @@ button.mbar:active { border-color: var(--line-strong); background: var(--bg); tr
 }
 
 /* ---------- Plan vs wykonanie ---------- */
+#exec-kpis { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 760px) { #exec-kpis { grid-template-columns: 1fr; } }
 .exec-notice {
   color: var(--ink-soft); font-size: 14px; line-height: 1.55; margin: 8px 0 0;
   padding: 18px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
