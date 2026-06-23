@@ -374,6 +374,25 @@ button.mbar:active { border-color: var(--line-strong); background: var(--bg); tr
 .exec-pct.is-over { color: var(--c-edu-ink); }
 .exec-pct.is-low { color: var(--danger); }
 
+.exec-summary {
+  margin: 6px 0 26px; padding: 16px 18px; font-size: 15px; line-height: 1.6; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--radius);
+}
+.exec-summary strong { font-weight: 600; }
+.exec-delta { font-size: 12px; margin: 5px 0 0; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.exec-delta.is-good { color: var(--c-edu-ink); }
+.exec-delta.is-bad { color: var(--danger); }
+
+/* paired plan vs wykonanie bars */
+.planbars { display: grid; gap: 16px; }
+.planbar-group { display: grid; gap: 4px; }
+.planbar-label { font-size: 13px; font-weight: 500; color: var(--ink); }
+.planbar-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px; }
+.planbar-track { height: 12px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.planbar-fill { display: block; height: 100%; border-radius: 4px; }
+.planbar-fill.is-plan { background: var(--line-strong); }
+.planbar-val { font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 104px; text-align: right; }
+
 /* ---------- Footer ---------- */
 .foot { border-top: 1px solid var(--line); margin-top: 64px; padding: 28px 0 56px; }
 .foot .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;

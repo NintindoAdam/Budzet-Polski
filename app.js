@@ -1188,8 +1188,21 @@
     loadExec(function (W) {
       if (!W) { if (notice) { notice.hidden = false; notice.textContent = "Nie udało się wczytać danych o wykonaniu."; } if (body) body.hidden = true; return; }
       if (body) body.hidden = false;
-      drawExecKPIs(W); drawExecList(W);
+      drawExecSummary(W); drawExecKPIs(W); drawExecBars(W); drawExecDochody(W); drawExecList(W); drawExecOdchylenia(W);
     });
+  }
+  // deviation helpers
+  function execDev(plan, wyk) { return { diff: wyk - plan, pct: plan ? (wyk / plan - 1) * 100 : 0 }; }
+  function absPct(p) { return Math.abs(p).toFixed(1).replace(".", ","); }
+  function signMoney(diff) { return (diff >= 0 ? "+" : "−") + money(Math.abs(diff)); }
+  function drawExecSummary(W) {
+    var el = document.getElementById("exec-summary"); if (!el) return;
+    var m = DATA.meta, w = W.wykonanie;
+    var dd = execDev(m.dochody, w.dochody), dw = execDev(m.wydatki, w.wydatki), df = execDev(m.deficyt, w.deficyt);
+    function mw(p) { return p < 0 ? "mniej" : "więcej"; }
+    el.innerHTML = "W " + (m.rok || YEAR) + " r. do budżetu wpłynęło o <strong>" + absPct(dd.pct) + "% " + mw(dd.pct) + "</strong>, niż zaplanowano (" + signMoney(dd.diff) +
+      "), a wydano o <strong>" + absPct(dw.pct) + "% " + mw(dw.pct) + "</strong> (" + signMoney(dw.diff) + "). " +
+      "W efekcie deficyt był o " + money(Math.abs(df.diff)) + " (" + absPct(df.pct) + "%) <strong>" + (df.diff < 0 ? "niższy" : "wyższy") + "</strong> od planu.";
   }
   function drawExecKPIs(W) {
     var m = DATA.meta;
@@ -1200,10 +1213,14 @@
     ];
     var host = document.getElementById("exec-kpis"); if (!host) return;
     host.innerHTML = cards.map(function (c, i) {
-      var pct = execPct(c.wyk, c.plan);
-      var foot = "plan " + money(c.plan) + (pct != null ? " · " + pct.toFixed(0) + "% planu" : "");
+      var dv = execDev(c.plan, c.wyk);
+      // deficyt lower than plan = good news → green; revenue/spend deviations stay neutral
+      var dCls = (c.label === "Deficyt") ? (dv.diff < 0 ? " is-good" : " is-bad") : "";
+      var delta = signMoney(dv.diff) + " · " + (dv.pct >= 0 ? "+" : "−") + absPct(dv.pct) + "% vs plan";
       return '<div class="stat anim-in" style="--anim-delay:' + (i * 50) + 'ms"><p class="stat-label">' + c.label + ' (wykonanie)</p>' +
-        '<p class="stat-value' + (c.danger ? " is-danger" : "") + '" data-ek="' + i + '"></p><p class="stat-foot">' + foot + "</p></div>";
+        '<p class="stat-value' + (c.danger ? " is-danger" : "") + '" data-ek="' + i + '"></p>' +
+        '<p class="stat-foot">plan ' + money(c.plan) + '</p>' +
+        '<p class="exec-delta' + dCls + '">' + delta + "</p></div>";
     }).join("");
     cards.forEach(function (c, i) {
       var el = host.querySelector('.stat-value[data-ek="' + i + '"]');
@@ -1226,6 +1243,67 @@
         '<span class="taxbar-track"><span class="taxbar-fill grow-in" style="width:' + w.toFixed(1) + "%;background:" + c.fill + ";border:1px solid " + c.line + '"></span></span>' +
         '<span class="taxbar-amt exec-pct ' + cls + '">' + (pct != null ? pct.toFixed(0) + "%" : "—") + "</span></div>";
     }).join("");
+  }
+  // module 4 — paired plan vs wykonanie bars for the big three
+  function drawExecBars(W) {
+    var host = document.getElementById("exec-bars"); if (!host) return;
+    var m = DATA.meta, w = W.wykonanie;
+    var rows = [
+      { label: "Wydatki", plan: m.wydatki, wyk: w.wydatki, col: cssVar("var(--accent)") },
+      { label: "Dochody", plan: m.dochody, wyk: w.dochody, col: cssVar("var(--c-transfer-line)") },
+      { label: "Deficyt", plan: m.deficyt, wyk: w.deficyt, col: cssVar("var(--danger)") }
+    ];
+    var max = d3.max(rows, function (r) { return Math.max(r.plan, r.wyk); }) || 1;
+    host.innerHTML = rows.map(function (r) {
+      function bar(val, cls, lab) {
+        var pw = Math.max(1, val / max * 100);
+        return '<div class="planbar-row"><span class="planbar-track"><span class="planbar-fill ' + cls + '" style="width:' + pw.toFixed(1) + "%;" + (cls === "is-wyk" ? "background:" + r.col : "") + '"></span></span>' +
+          '<span class="planbar-val">' + lab + " " + moneyShort(val) + "</span></div>";
+      }
+      return '<div class="planbar-group"><div class="planbar-label">' + r.label + "</div>" +
+        bar(r.plan, "is-plan", "plan") + bar(r.wyk, "is-wyk", "wyk") + "</div>";
+    }).join("");
+  }
+  // module 2 — dochody by source: plan vs wykonanie
+  function drawExecDochody(W) {
+    var host = document.getElementById("exec-dochody"); if (!host || !W.dochody) return;
+    var inneName = "Inne dochody podatkowe i niepodatkowe";
+    var known = W.dochody.VAT + W.dochody.Akcyza + W.dochody.CIT + W.dochody.PIT;
+    var wykOf = function (name) { return name === inneName ? (W.wykonanie.dochody - known) : W.dochody[name]; };
+    var rows = DATA.dochody.slice().filter(function (d) { return wykOf(d.name) != null; }).sort(function (a, b) { return b.plan - a.plan; });
+    host.innerHTML = rows.map(function (d) {
+      var wyk = wykOf(d.name), pct = execPct(wyk, d.plan);
+      var w = Math.max(2, Math.min(pct == null ? 0 : pct, 100));
+      var c = CMAP[colorKey(d.name)];
+      var cls = pct == null ? "" : (pct >= 99 ? "is-over" : (pct < 85 ? "is-low" : ""));
+      return '<div class="taxbar" title="' + escapeHtml(d.name) + ": plan " + money(d.plan) + " → wykonanie " + money(wyk) + '">' +
+        '<span class="taxbar-name">' + escapeHtml(d.name) + "</span>" +
+        '<span class="taxbar-track"><span class="taxbar-fill grow-in" style="width:' + w.toFixed(1) + "%;background:" + c.fill + ";border:1px solid " + c.line + '"></span></span>' +
+        '<span class="taxbar-amt exec-pct ' + cls + '">' + (pct != null ? pct.toFixed(0) + "%" : "—") + "</span></div>";
+    }).join("");
+  }
+  // module 3 — biggest dział deviations (wykonanie − plan)
+  function drawExecOdchylenia(W) {
+    var host = document.getElementById("exec-odchylenia"); if (!host) return;
+    var rows = DATA.dzialy.filter(function (d) { return W.dzialy[d.code] != null; }).map(function (d) {
+      var wyk = W.dzialy[d.code];
+      return { name: d.name, diff: wyk - d.plan, pct: d.plan ? wyk / d.plan * 100 : null };
+    }).filter(function (r) { return Math.abs(r.diff) > 0; });
+    var above = rows.filter(function (r) { return r.diff > 0; }).sort(function (a, b) { return b.diff - a.diff; }).slice(0, 5);
+    var below = rows.filter(function (r) { return r.diff < 0; }).sort(function (a, b) { return a.diff - b.diff; }).slice(0, 5);
+    var maxAbs = d3.max(rows, function (r) { return Math.abs(r.diff); }) || 1;
+    function list(title, arr, up) {
+      return '<div class="movers-col"><h4 class="movers-h ' + (up ? "is-up" : "is-down") + '">' + title + "</h4>" +
+        arr.map(function (r) {
+          var w = Math.max(3, Math.abs(r.diff) / maxAbs * 100);
+          var c = CMAP[colorKey(r.name)];
+          var pct = r.pct == null ? "" : ' <span class="mv-pct">' + r.pct.toFixed(0) + "% planu</span>";
+          return '<div class="mv-row"><span class="mv-name">' + escapeHtml(r.name) + "</span>" +
+            '<span class="mv-track"><span class="mv-fill" style="width:' + w.toFixed(1) + "%;background:" + c.fill + ";border:1px solid " + c.line + '"></span></span>' +
+            '<span class="mv-amt">' + signMoney(r.diff) + pct + "</span></div>";
+        }).join("") + "</div>";
+    }
+    host.innerHTML = list("Najbardziej powyżej planu", above, true) + list("Najbardziej poniżej planu", below, false);
   }
 
   // ---------- tabs & axis ----------
