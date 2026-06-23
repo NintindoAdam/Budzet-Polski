@@ -148,7 +148,7 @@ button.mbar:active { border-color: var(--line-strong); background: var(--bg); tr
   display: flex; align-items: center; justify-content: space-between;
   gap: 16px; flex-wrap: wrap; margin: 44px 0 18px;
 }
-.tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line);
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; background: var(--surface); border: 1px solid var(--line);
   border-radius: var(--radius); padding: 4px; box-shadow: var(--shadow-sm); }
 .tab {
   appearance: none; border: 0; background: transparent; cursor: pointer;
@@ -363,6 +363,14 @@ button.mbar:active { border-color: var(--line-strong); background: var(--bg); tr
   .taxbar-track, .mv-track { grid-area: track; }
   .cat-pick input[type="number"] { width: 100%; flex: 1 1 auto; }
 }
+
+/* ---------- Plan vs wykonanie ---------- */
+.exec-notice {
+  color: var(--ink-soft); font-size: 14px; line-height: 1.55; margin: 8px 0 0;
+  padding: 18px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.exec-pct.is-over { color: var(--c-edu-ink); }
+.exec-pct.is-low { color: var(--danger); }
 
 /* ---------- Footer ---------- */
 .foot { border-top: 1px solid var(--line); margin-top: 64px; padding: 28px 0 56px; }

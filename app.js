@@ -1162,16 +1162,76 @@
   function drawTax1000() { taxBarList("tax-1000", function (s) { return s * 1000; }, function (v) { return Math.round(v) + " zł"; }); }
   function drawTaxSplit() { taxBarList("tax-split", function (s) { return s * taxAmount; }, function (v) { return zlFull(v); }); }
 
+  // ================= PLAN VS WYKONANIE (test — na razie tylko 2025) =================
+  var WYK_FILES = { 2025: "wykonanie-2025.json" };
+  var WYK_CACHE = {};
+  function loadExec(cb) {
+    var file = WYK_FILES[YEAR];
+    if (!file) { cb(null); return; }
+    if (WYK_CACHE[YEAR]) { cb(WYK_CACHE[YEAR]); return; }
+    fetch(file).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (json) { WYK_CACHE[YEAR] = json; cb(json); })
+      .catch(function (err) { console.error(err); cb(null); });
+  }
+  function execPct(wyk, plan) { return plan > 0 ? wyk / plan * 100 : null; }
+  function drawExec() {
+    var st = document.getElementById("exec-state"), body = document.getElementById("exec-body"), notice = document.getElementById("exec-notice");
+    if (st) st.style.display = "none";
+    if (!WYK_FILES[YEAR]) { if (body) body.hidden = true; if (notice) notice.hidden = false; return; }
+    if (notice) notice.hidden = true;
+    loadExec(function (W) {
+      if (!W) { if (notice) { notice.hidden = false; notice.textContent = "Nie udało się wczytać danych o wykonaniu."; } if (body) body.hidden = true; return; }
+      if (body) body.hidden = false;
+      drawExecKPIs(W); drawExecList(W);
+    });
+  }
+  function drawExecKPIs(W) {
+    var m = DATA.meta;
+    var cards = [
+      { label: "Wydatki", plan: m.wydatki, wyk: W.wykonanie.wydatki, danger: false },
+      { label: "Dochody", plan: m.dochody, wyk: W.wykonanie.dochody, danger: false },
+      { label: "Deficyt", plan: m.deficyt, wyk: W.wykonanie.deficyt, danger: true }
+    ];
+    var host = document.getElementById("exec-kpis"); if (!host) return;
+    host.innerHTML = cards.map(function (c, i) {
+      var pct = execPct(c.wyk, c.plan);
+      var foot = "plan " + money(c.plan) + (pct != null ? " · " + pct.toFixed(0) + "% planu" : "");
+      return '<div class="stat anim-in" style="--anim-delay:' + (i * 50) + 'ms"><p class="stat-label">' + c.label + ' (wykonanie)</p>' +
+        '<p class="stat-value' + (c.danger ? " is-danger" : "") + '" data-ek="' + i + '"></p><p class="stat-foot">' + foot + "</p></div>";
+    }).join("");
+    cards.forEach(function (c, i) {
+      var el = host.querySelector('.stat-value[data-ek="' + i + '"]');
+      var key = "__ek" + i, from = prevStatVals[key]; if (from == null) from = 0;
+      var fmt = statMoneyFmt(c.wyk);
+      tweenValue(from, c.wyk, 900, function (v) { var r = fmt(v); el.innerHTML = r.num + (r.unit ? '<span class="unit">' + r.unit + "</span>" : ""); });
+      prevStatVals[key] = c.wyk;
+    });
+  }
+  function drawExecList(W) {
+    var host = document.getElementById("exec-list"); if (!host) return;
+    var dz = DATA.dzialy.slice().filter(function (d) { return W.dzialy[d.code] != null; }).sort(function (a, b) { return b.plan - a.plan; });
+    host.innerHTML = dz.map(function (d) {
+      var wyk = W.dzialy[d.code], pct = execPct(wyk, d.plan);
+      var w = Math.max(2, Math.min(pct == null ? 0 : pct, 100));
+      var c = CMAP[colorKey(d.name)];
+      var cls = pct == null ? "" : (pct >= 99 ? "is-over" : (pct < 85 ? "is-low" : ""));
+      return '<div class="taxbar" title="' + escapeHtml(d.name) + ": plan " + money(d.plan) + " → wykonanie " + money(wyk) + '">' +
+        '<span class="taxbar-name">' + escapeHtml(d.name) + "</span>" +
+        '<span class="taxbar-track"><span class="taxbar-fill grow-in" style="width:' + w.toFixed(1) + "%;background:" + c.fill + ";border:1px solid " + c.line + '"></span></span>' +
+        '<span class="taxbar-amt exec-pct ' + cls + '">' + (pct != null ? pct.toFixed(0) + "%" : "—") + "</span></div>";
+    }).join("");
+  }
+
   // ---------- tabs & axis ----------
   function wireTabs() {
-    var tabs = [["tab-tree", "panel-tree", "tree"], ["tab-flow", "panel-flow", "flow"], ["tab-type", "panel-type", "type"], ["tab-trends", "panel-trends", "trends"], ["tab-taxes", "panel-taxes", "taxes"]];
+    var tabs = [["tab-tree", "panel-tree", "tree"], ["tab-flow", "panel-flow", "flow"], ["tab-type", "panel-type", "type"], ["tab-trends", "panel-trends", "trends"], ["tab-taxes", "panel-taxes", "taxes"], ["tab-exec", "panel-exec", "exec"]];
     tabs.forEach(function (t) {
       document.getElementById(t[0]).addEventListener("click", function () { switchView(t[2]); });
     });
   }
   function switchView(v) {
     view = v;
-    var map = { tree: ["tab-tree", "panel-tree"], flow: ["tab-flow", "panel-flow"], type: ["tab-type", "panel-type"], trends: ["tab-trends", "panel-trends"], taxes: ["tab-taxes", "panel-taxes"] };
+    var map = { tree: ["tab-tree", "panel-tree"], flow: ["tab-flow", "panel-flow"], type: ["tab-type", "panel-type"], trends: ["tab-trends", "panel-trends"], taxes: ["tab-taxes", "panel-taxes"], exec: ["tab-exec", "panel-exec"] };
     Object.keys(map).forEach(function (k) {
       var isSel = k === v;
       document.getElementById(map[k][0]).setAttribute("aria-selected", isSel ? "true" : "false");
@@ -1196,6 +1256,7 @@
     if (v === "type") drawTypes();
     if (v === "trends") loadTrends(function () { loadContext(drawTrends); });
     if (v === "taxes") loadContext(function () { wireTaxes(); drawTaxes(); });
+    if (v === "exec") drawExec();
   }
 
   function wireAxis() {
@@ -1227,6 +1288,7 @@
       // trends dashboard is year-independent — just move the year marker, no crossfade
       if (view === "trends") { if (TRENDS) drawTrendCharts(); return; }
       if (view === "taxes") { drawTaxes(); return; }
+      if (view === "exec") { drawExec(); return; }
       // re-render whichever year-specific view is active, with a blurred crossfade
       crossfadeRedraw(function () {
         if (view === "tree") drawTree();
@@ -1270,6 +1332,7 @@
     else if (view === "type") drawTypes();
     else if (view === "trends" && TRENDS) drawTrendCharts();
     else if (view === "taxes" && DATA) drawTaxes();
+    else if (view === "exec" && DATA) drawExec();
   }
 
   // redraw active view immediately when crossing the mobile/desktop breakpoint

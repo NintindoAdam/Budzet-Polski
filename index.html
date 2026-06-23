@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.7.0/dist/tabler-icons.min.css">
-<link rel="stylesheet" href="style.css?v=17">
+<link rel="stylesheet" href="style.css?v=18">
 </head>
 <body>
 
@@ -85,6 +85,9 @@
         </button>
         <button class="tab" role="tab" id="tab-taxes" aria-selected="false" aria-controls="panel-taxes">
           <i class="ti ti-user-dollar" aria-hidden="true"></i> Twoje podatki
+        </button>
+        <button class="tab" role="tab" id="tab-exec" aria-selected="false" aria-controls="panel-exec">
+          <i class="ti ti-checklist" aria-hidden="true"></i> Plan vs wykonanie
         </button>
       </div>
 
@@ -215,7 +218,26 @@
           <div class="bars" id="tax-split"></div>
         </section>
 
-        <p class="hint"><i class="ti ti-info-circle" aria-hidden="true"></i> Podział wg struktury wydatków budżetu (działy). „Na obywatela" = wydatki ÷ liczba ludności (GUS). To ilustracja proporcji, nie rzeczywista alokacja Twoich podatków.</p>
+        <p class="hint"><i class="ti ti-info-circle" aria-hidden="true"></i> Podział wg struktury wydatków budżetu (działy). „Na obywatela” = wydatki ÷ liczba ludności (GUS). To ilustracja proporcji, nie rzeczywista alokacja Twoich podatków.</p>
+      </div>
+    </div>
+
+    <!-- PLAN VS WYKONANIE (test, 2025) -->
+    <div class="panel" id="panel-exec" role="tabpanel" aria-labelledby="tab-exec" hidden>
+      <p style="color:var(--ink-soft); max-width:66ch; margin:0 0 16px;">Ile z zaplanowanego budżetu faktycznie wydano. Porównanie planu z ustawy budżetowej z wykonaniem (sprawozdanie Ministerstwa Finansów). Wersja testowa: na razie tylko rok 2025.</p>
+
+      <div class="state" id="exec-state"><div class="spinner"></div>Wczytuję dane o wykonaniu…</div>
+      <p class="exec-notice" id="exec-notice" hidden>Dane o wykonaniu są na razie dostępne tylko dla roku <strong>2025</strong> (wersja testowa). Wybierz rok 2025 w pasku powyżej.</p>
+
+      <div id="exec-body" hidden>
+        <div class="stats trend-kpis" id="exec-kpis" aria-label="Plan vs wykonanie — ogółem"></div>
+
+        <section class="trend-section">
+          <h3 class="trend-h">Stopień wykonania wg działów</h3>
+          <div class="bars" id="exec-list"></div>
+        </section>
+
+        <p class="hint"><i class="ti ti-info-circle" aria-hidden="true"></i> „% planu” = wykonanie ÷ plan z ustawy. MF liczy wykonanie względem planu po zmianach (po rezerwach), więc względem pierwotnej ustawy bywa ponad 100% tam, gdzie uruchomiono rezerwy celowe (np. rolnictwo, zdrowie). Ok. 1,6 mld zł trafiło do działów spoza pierwotnego planu.</p>
       </div>
     </div>
   </section>
@@ -232,6 +254,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
-<script src="app.js?v=17"></script>
+<script src="app.js?v=18"></script>
 </body>
 </html>
