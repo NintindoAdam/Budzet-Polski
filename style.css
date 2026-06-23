@@ -165,8 +165,12 @@ button.mbar:active { border-color: var(--line-strong); background: var(--bg); tr
 .axis-toggle { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; color: var(--ink-soft); flex-wrap: wrap; }
 
 /* ---------- Prominent year bar ---------- */
-.year-bar-section { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--surface); margin-top: 8px; }
-.year-bar { display: flex; align-items: flex-start; gap: 16px; padding: 18px 0; flex-wrap: wrap; }
+.year-bar-section { margin-top: 8px; }
+.year-bar {
+  display: flex; align-items: flex-start; gap: 16px; padding: 18px 22px; flex-wrap: wrap;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow-sm);
+}
 .year-bar-label { font-size: 15px; font-weight: 500; color: var(--ink); padding-top: 8px; white-space: nowrap; }
 .year-bar-buttons { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
 .year-bar-buttons button {
