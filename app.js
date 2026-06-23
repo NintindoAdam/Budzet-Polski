@@ -467,6 +467,13 @@
     var d = (DATA.dzialy || []).filter(function (x) { return x.code === code; })[0];
     return d || null;
   }
+  // Polish plural: 1 część / 2-4 części / 5+ części
+  function plural(n, one, few, many) {
+    n = Math.abs(n); var d10 = n % 10, d100 = n % 100;
+    if (n === 1) return one;
+    if (d10 >= 2 && d10 <= 4 && !(d100 >= 12 && d100 <= 14)) return few;
+    return many;
+  }
 
   function drawDzialDetail(code) {
     var host = document.getElementById("dzial-detail"); if (!host) return;
@@ -475,68 +482,73 @@
     var agg = aggregatePartsForDzial(code);
     var share = (dz.plan / DATA.meta.wydatki * 100).toFixed(1).replace(".", ",");
     var maxSum = agg.rows.length ? agg.rows[0].sum : 1;
+    var nRoz = d3.sum(agg.rows, function (r) { return r.rozdzialy.length; });
     var col = CMAP[colorKey(dz.name)];
 
-    var parts = agg.rows.map(function (r) {
+    var parts = agg.rows.map(function (r, i) {
       var w = Math.max(2, r.sum / maxSum * 100);
+      var pShare = r.sum / agg.aggTotal * 100;
       var rc = CMAP[colorKey(r.czescName)];
       var rozHtml = r.rozdzialy.slice().sort(function (a, b) { return b.plan - a.plan; }).map(function (rz) {
+        var rsh = r.sum ? (rz.plan / r.sum * 100) : 0;
         return '<div class="dd-roz"><span class="dd-roz-name">' + escapeHtml(rz.name) +
-          ' <span class="dd-code">' + rz.code + '</span></span><span class="dd-roz-amt">' + money(rz.plan) + '</span></div>';
+          ' <span class="dd-code">' + rz.code + '</span></span>' +
+          '<span class="dd-roz-amt">' + money(rz.plan) + ' <span class="dd-roz-pct">' + rsh.toFixed(0) + '%</span></span></div>';
       }).join("");
-      return '<details class="dd-part">' +
+      return '<details class="dd-part" style="--i:' + i + '">' +
         '<summary>' +
-          '<span class="dd-part-head"><span class="dd-part-name">' + escapeHtml(r.czescName) +
-            ' <span class="dd-code">cz. ' + r.czescCode + '</span></span>' +
-            '<span class="dd-part-amt">' + money(r.sum) + '</span></span>' +
-          '<span class="dd-track"><span class="dd-fill" style="width:' + w.toFixed(1) + '%;background:' + rc.fill + ';border:1px solid ' + rc.line + '"></span></span>' +
+          '<span class="dd-part-head">' +
+            '<span class="dd-part-name">' + escapeHtml(r.czescName) + ' <span class="dd-code">cz. ' + r.czescCode + '</span></span>' +
+            '<span class="dd-part-amt">' + money(r.sum) + ' <span class="dd-part-pct">' + pShare.toFixed(0) + '%</span></span>' +
+          '</span>' +
+          '<span class="dd-track"><span class="dd-fill dd-grow" style="width:' + w.toFixed(1) + '%;background:' + rc.fill + ';border:1px solid ' + rc.line + '"></span></span>' +
         '</summary>' +
-        (rozHtml ? '<div class="dd-roz-list">' + rozHtml + '</div>' : '<div class="dd-roz-list"><p class="dd-empty">Brak rozdziałów w danych.</p></div>') +
+        '<div class="dd-roz-list">' + (rozHtml || '<p class="dd-empty">Brak rozdziałów w danych.</p>') + '</div>' +
         '</details>';
     }).join("");
 
     host.innerHTML =
       '<button class="dd-back" id="dd-back"><i class="ti ti-arrow-left" aria-hidden="true"></i> Wszystkie działy</button>' +
-      '<div class="dd-header" style="border-left:4px solid ' + col.line + '">' +
-        '<p class="dd-eyebrow">Dział ' + escapeHtml(code) + ' · budżet ' + (DATA.meta.rok || YEAR) + '</p>' +
+      '<header class="dd-header">' +
+        '<span class="dd-accent" style="background:' + col.line + '"></span>' +
+        '<p class="dd-eyebrow">Dział ' + escapeHtml(code) + ' · plan ' + (DATA.meta.rok || YEAR) + '</p>' +
         '<h2 class="dd-title">' + escapeHtml(dz.name) + '</h2>' +
-        '<p class="dd-amount">' + money(dz.plan) + ' <span class="dd-share">' + share + '% budżetu</span></p>' +
-      '</div>' +
+        '<p class="dd-amount"><span class="dd-amount-num" id="dd-amt"></span><span class="dd-share">' + share + '% budżetu</span></p>' +
+        '<p class="dd-meta">' + agg.rows.length + ' ' + plural(agg.rows.length, "część", "części", "części") +
+          ' · ' + nRoz + ' ' + plural(nRoz, "rozdział", "rozdziały", "rozdziałów") + '</p>' +
+      '</header>' +
       '<h3 class="dd-h">Kto to wydaje</h3>' +
-      '<p class="dd-sub">Części (dysponenci) wnoszące wydatki do tego działu. Rozwiń, by zobaczyć rozdziały.</p>' +
+      '<p class="dd-sub">Części (dysponenci) wnoszące wydatki do tego działu, wg udziału. Rozwiń, by zobaczyć rozdziały.</p>' +
       '<div class="dd-parts">' + parts + '</div>' +
-      '<p class="hint"><i class="ti ti-info-circle" aria-hidden="true"></i> Suma rozbicia wg części (' + money(agg.aggTotal) +
+      '<p class="hint dd-note"><i class="ti ti-info-circle" aria-hidden="true"></i> Suma rozbicia wg części (' + money(agg.aggTotal) +
         ') może nieznacznie różnić się od kwoty zbiorczej działu (' + money(dz.plan) + ') — to różnice klasyfikacyjne w ustawie, nie błąd.</p>';
 
     var back = document.getElementById("dd-back");
     if (back) back.addEventListener("click", function () { closeDzial(true); });
+    var amtEl = document.getElementById("dd-amt");
+    if (amtEl) {
+      var f = statMoneyFmt(dz.plan);
+      tweenValue(0, dz.plan, 900, function (v) { var rr = f(v); amtEl.innerHTML = rr.num + '<span class="unit"> ' + rr.unit + '</span>'; });
+    }
   }
 
+  // focus mode: a body class hides hero / year bar / tabs / treemap (CSS), leaving the detail
   function openDzial(code, push) {
     if (!DATA || !dzialMeta(code)) return;
     dzialDetail = code;
-    document.getElementById("treemap-wrap").style.display = "none";
-    document.getElementById("legend").style.display = "none";
-    var hint = document.getElementById("tree-hint"); if (hint) hint.style.display = "none";
-    document.getElementById("crumbs").style.display = "none";
-    document.getElementById("axis-toggle").style.display = "none";
+    document.body.classList.add("dzial-open");
     var det = document.getElementById("dzial-detail");
     drawDzialDetail(code);
     det.hidden = false;
-    det.scrollIntoView ? window.scrollTo({ top: 0 }) : null;
+    window.scrollTo({ top: 0 });
     if (push) history.pushState({ rok: DETAIL_YEAR, dzial: code }, "", "?rok=" + DETAIL_YEAR + "&dzial=" + code);
   }
 
   function closeDzial(push) {
     if (dzialDetail == null) return;
     dzialDetail = null;
+    document.body.classList.remove("dzial-open");
     var det = document.getElementById("dzial-detail"); if (det) det.hidden = true;
-    document.getElementById("treemap-wrap").style.display = "";
-    document.getElementById("legend").style.display = "";
-    var hint = document.getElementById("tree-hint"); if (hint) hint.style.display = "";
-    document.getElementById("crumbs").style.display = "";
-    // axis toggle only on tree view
-    document.getElementById("axis-toggle").style.display = (view === "tree") ? "inline-flex" : "none";
     if (view === "tree") drawTree();
     if (push) history.pushState({}, "", location.pathname);
   }

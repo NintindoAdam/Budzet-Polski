@@ -393,50 +393,85 @@ button.mbar:active { border-color: var(--line-strong); background: var(--bg); tr
 .planbar-fill.is-plan { background: var(--line-strong); }
 .planbar-val { font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; min-width: 104px; text-align: right; }
 
-/* ---------- Dział detail (beta, 2025) ---------- */
-.dzial-detail { animation: panelIn var(--dur-ui) var(--ease-out) both; }
+/* ---------- Dział detail (beta, 2025) — focus mode ---------- */
+/* When a dział is open, hide the page chrome so the numbers take focus (logo stays). */
+body.dzial-open .hero,
+body.dzial-open .year-bar-section,
+body.dzial-open .controls,
+body.dzial-open #treemap-wrap,
+body.dzial-open #legend,
+body.dzial-open #tree-hint,
+body.dzial-open #crumbs { display: none; }
+body.dzial-open #panel-tree { padding-top: 8px; }
+
+.dzial-detail { max-width: 760px; }
 .dd-back {
-  background: none; border: 0; padding: 6px 2px; font: inherit; font-size: 14px; font-weight: 500;
+  background: none; border: 0; padding: 8px 10px 8px 0; font: inherit; font-size: 14px; font-weight: 500;
   color: var(--accent); cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
-  transition: transform var(--dur-press) var(--ease-out);
+  transition: transform var(--dur-press) var(--ease-out), opacity var(--dur-ui) var(--ease-out);
 }
 .dd-back:active { transform: scale(0.97); }
-.dd-back i { font-size: 16px; }
-@media (hover: hover) and (pointer: fine) { .dd-back:hover { text-decoration: underline; } }
+.dd-back i { font-size: 17px; }
+@media (hover: hover) and (pointer: fine) { .dd-back:hover { opacity: 0.7; } }
 
-.dd-header { padding: 12px 0 14px 16px; margin: 6px 0 20px; }
-.dd-eyebrow { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); font-weight: 500; margin: 0 0 6px; }
-.dd-title { font-size: clamp(22px, 4vw, 30px); font-weight: 600; letter-spacing: -0.01em; line-height: 1.12; margin: 0 0 8px; }
-.dd-amount { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; margin: 0; }
-.dd-share { font-size: 14px; font-weight: 400; color: var(--ink-faint); margin-left: 6px; }
+/* header — focused hero for the dział */
+.dd-header { position: relative; padding: 14px 0 18px 18px; margin: 8px 0 26px; }
+.dd-accent { position: absolute; left: 0; top: 4px; bottom: 4px; width: 4px; border-radius: 4px; }
+.dd-eyebrow { font-size: 12px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--accent); font-weight: 500; margin: 0 0 8px; }
+.dd-title { font-size: clamp(24px, 5vw, 36px); font-weight: 600; letter-spacing: -0.02em; line-height: 1.08; margin: 0 0 12px; max-width: 18ch; }
+.dd-amount { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin: 0 0 6px; }
+.dd-amount-num { font-size: clamp(26px, 5vw, 34px); font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.dd-amount-num .unit { font-size: 0.5em; font-weight: 400; color: var(--ink-faint); }
+.dd-share {
+  font-size: 13px; font-weight: 500; color: var(--accent); background: rgba(124, 92, 62, 0.09);
+  padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+}
+.dd-meta { font-size: 13px; color: var(--ink-faint); margin: 0; font-variant-numeric: tabular-nums; }
 
 .dd-h { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 4px; }
-.dd-sub { font-size: 13px; color: var(--ink-soft); margin: 0 0 14px; max-width: 62ch; }
+.dd-sub { font-size: 13px; color: var(--ink-soft); margin: 0 0 16px; max-width: 60ch; }
 
-.dd-parts { margin: 0 0 16px; }
-.dd-part { border-bottom: 1px solid var(--line); }
+.dd-parts { margin: 0 0 18px; }
+.dd-part { border-bottom: 1px solid var(--line); opacity: 0; animation: ddRowIn var(--dur-enter) var(--ease-out) forwards; animation-delay: calc(var(--i, 0) * 38ms); }
+.dd-part:first-child { border-top: 1px solid var(--line); }
 .dd-part > summary {
-  list-style: none; cursor: pointer; padding: 11px 22px 11px 0; display: grid; gap: 6px; position: relative;
+  list-style: none; cursor: pointer; padding: 12px 24px 12px 0; display: grid; gap: 7px; position: relative;
   transition: background var(--dur-ui) var(--ease-out);
 }
 .dd-part > summary::-webkit-details-marker { display: none; }
 .dd-part > summary::after {
-  content: "\203A"; position: absolute; right: 6px; top: 9px; font-size: 18px; color: var(--ink-faint);
+  content: "\203A"; position: absolute; right: 4px; top: 10px; font-size: 19px; color: var(--ink-faint);
   transition: transform var(--dur-ui) var(--ease-out);
 }
-.dd-part[open] > summary::after { transform: rotate(90deg); }
+.dd-part[open] > summary::after { transform: rotate(90deg); color: var(--accent); }
 @media (hover: hover) and (pointer: fine) { .dd-part > summary:hover { background: var(--bg); } }
-.dd-part-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.dd-part-name { font-size: 14px; font-weight: 500; color: var(--ink); }
-.dd-code { color: var(--ink-faint); font-weight: 400; font-size: 12px; font-variant-numeric: tabular-nums; }
+.dd-part-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.dd-part-name { font-size: 14px; font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
+.dd-code { color: var(--ink-faint); font-weight: 400; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .dd-part-amt { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dd-part-pct { color: var(--ink-faint); font-weight: 400; font-size: 12px; }
 .dd-track { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
-.dd-fill { display: block; height: 100%; border-radius: 4px; }
-.dd-roz-list { padding: 2px 0 12px 14px; margin: 0 0 4px 3px; border-left: 2px solid var(--line); }
-.dd-roz { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 5px 0; font-size: 13px; color: var(--ink-soft); }
+.dd-fill { display: block; height: 100%; border-radius: 4px; transform-origin: left center; }
+.dd-fill.dd-grow { animation: ddBarGrow var(--dur-enter) var(--ease-out) both; animation-delay: calc(var(--i, 0) * 38ms + 80ms); }
+.dd-roz-list { padding: 4px 0 14px 14px; margin: 2px 0 6px 1px; border-left: 2px solid var(--line); }
+.dd-roz { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 13px; color: var(--ink-soft); }
 .dd-roz-name { min-width: 0; }
 .dd-roz-amt { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dd-roz-pct { color: var(--ink-faint); margin-left: 4px; }
 .dd-empty { color: var(--ink-faint); font-size: 13px; margin: 4px 0; }
+.dd-note { margin-top: 18px; }
+
+@keyframes ddRowIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes ddBarGrow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .dd-part { opacity: 1; animation: none; }
+  .dd-fill.dd-grow { animation: none; }
+}
+@media (max-width: 760px) {
+  .dd-title { max-width: none; }
+  .dd-header { padding-left: 14px; }
+}
 
 /* ---------- Footer ---------- */
 .foot { border-top: 1px solid var(--line); margin-top: 64px; padding: 28px 0 56px; }
