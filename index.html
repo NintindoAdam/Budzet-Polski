@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.7.0/dist/tabler-icons.min.css">
-<link rel="stylesheet" href="style.css?v=21">
+<link rel="stylesheet" href="style.css?v=22">
 </head>
 <body>
 
@@ -111,7 +111,10 @@
         <div id="tree-rest" aria-label="Lista wydatków"></div>
       </div>
       <div class="legend" id="legend"></div>
-      <p class="hint"><i class="ti ti-pointer" aria-hidden="true"></i> Kliknij pole, aby wejść w szczegóły. Kliknij ścieżkę powyżej, aby wrócić.</p>
+      <p class="hint" id="tree-hint"><i class="ti ti-pointer" aria-hidden="true"></i> Kliknij pole, aby wejść w szczegóły. Kliknij ścieżkę powyżej, aby wrócić.</p>
+
+      <!-- DZIAŁ DETAIL (beta, 2025) — filled by JS -->
+      <section class="dzial-detail" id="dzial-detail" aria-label="Szczegóły działu" hidden></section>
     </div>
 
     <!-- SANKEY -->
@@ -271,6 +274,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
-<script src="app.js?v=21"></script>
+<script src="app.js?v=22"></script>
 </body>
 </html>

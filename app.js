@@ -11,6 +11,8 @@
   var axis = "dzialy";        // "dzialy" | "czesci"
   var view = "tree";          // "tree" | "flow" | "type"
   var path = [];              // drill-down stack of node objects
+  var dzialDetail = null;     // beta: open dział detail (code) or null — only YEAR 2025
+  var DETAIL_YEAR = 2025;     // years that support the dział detail view
 
   var fmtPL = new Intl.NumberFormat("pl-PL");
   var tooltip = document.getElementById("tooltip");
@@ -88,6 +90,8 @@
       wireYear();
       updateExecTab(); // hide the Plan vs wykonanie tab unless the current year has data
       window.addEventListener("resize", debounce(onResize, 150));
+      window.addEventListener("popstate", syncFromUrl); // back/forward toggles the dział detail
+      initFromUrl(); // deep link ?rok=2025&dzial=NNN
       // release the staggered first-load entrance after the first paint
       requestAnimationFrame(function () {
         requestAnimationFrame(function () { document.body.classList.add("is-loaded"); });
@@ -317,10 +321,10 @@
     g.on("mousemove", function (ev, d) { showTip(ev, d.data, total); })
       .on("mouseleave", hideTip)
       .on("click", function (ev, d) { onTileClick(d.data); })
-      .style("cursor", function (d) { return canDrill(d.data) ? "pointer" : "default"; })
+      .style("cursor", function (d) { return tileInteractive(d.data) ? "pointer" : "default"; })
       .attr("tabindex", 0).attr("role", "button")
       .attr("aria-label", function (d) {
-        return d.data.name + ", " + money(d.data.value) + (canDrill(d.data) ? ", kliknij aby wejść w szczegóły" : "");
+        return d.data.name + ", " + money(d.data.value) + (tileInteractive(d.data) ? ", kliknij aby wejść w szczegóły" : "");
       })
       .on("keydown", function (ev, d) {
         if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); onTileClick(d.data); }
@@ -347,7 +351,7 @@
       var c = CMAP[colorKey(d.name)];
       var w = Math.max(2, d.value / max * 100);
       var pct = (d.value / total * 100).toFixed(1).replace(".", ",");
-      var drill = canDrill(d);
+      var drill = tileInteractive(d);
       var delay = Math.min((idx || 0) * 30, 360);
       var el = document.createElement(drill ? "button" : "div");
       el.className = "mbar" + (drill ? " is-drill" : "");
@@ -408,8 +412,12 @@
     // drilling available only on części axis (część -> dział -> rozdział)
     return axis === "czesci" && d.hasChildren;
   }
+  // beta: in działy mode on a supported year, a tile opens the dział detail view
+  function canOpenDetail() { return axis === "dzialy" && YEAR === DETAIL_YEAR; }
+  function tileInteractive(d) { return canDrill(d) || canOpenDetail(); }
 
   function onTileClick(d) {
+    if (canOpenDetail()) { openDzial(d.code, true); return; }
     if (!canDrill(d)) return;
     restExpanded = false;
     if (path.length === 0) {
@@ -440,12 +448,125 @@
     });
   }
 
+  // ================= DZIAŁ DETAIL (beta, 2025) =================
+  // aggregate which części fund a given dział (by code), with their rozdziały
+  function aggregatePartsForDzial(code) {
+    var rows = [];
+    (DATA.czesci || []).forEach(function (cz) {
+      var sum = 0, roz = [];
+      (cz.dzialy || []).forEach(function (dz) {
+        if (dz.code === code) { sum += dz.plan; if (dz.rozdzialy) roz = roz.concat(dz.rozdzialy); }
+      });
+      if (sum > 0) rows.push({ czescCode: cz.code, czescName: cz.name, sum: sum, rozdzialy: roz });
+    });
+    rows.sort(function (a, b) { return b.sum - a.sum; });
+    return { rows: rows, aggTotal: d3.sum(rows, function (r) { return r.sum; }) };
+  }
+
+  function dzialMeta(code) {
+    var d = (DATA.dzialy || []).filter(function (x) { return x.code === code; })[0];
+    return d || null;
+  }
+
+  function drawDzialDetail(code) {
+    var host = document.getElementById("dzial-detail"); if (!host) return;
+    var dz = dzialMeta(code);
+    if (!dz) { closeDzial(true); return; }
+    var agg = aggregatePartsForDzial(code);
+    var share = (dz.plan / DATA.meta.wydatki * 100).toFixed(1).replace(".", ",");
+    var maxSum = agg.rows.length ? agg.rows[0].sum : 1;
+    var col = CMAP[colorKey(dz.name)];
+
+    var parts = agg.rows.map(function (r) {
+      var w = Math.max(2, r.sum / maxSum * 100);
+      var rc = CMAP[colorKey(r.czescName)];
+      var rozHtml = r.rozdzialy.slice().sort(function (a, b) { return b.plan - a.plan; }).map(function (rz) {
+        return '<div class="dd-roz"><span class="dd-roz-name">' + escapeHtml(rz.name) +
+          ' <span class="dd-code">' + rz.code + '</span></span><span class="dd-roz-amt">' + money(rz.plan) + '</span></div>';
+      }).join("");
+      return '<details class="dd-part">' +
+        '<summary>' +
+          '<span class="dd-part-head"><span class="dd-part-name">' + escapeHtml(r.czescName) +
+            ' <span class="dd-code">cz. ' + r.czescCode + '</span></span>' +
+            '<span class="dd-part-amt">' + money(r.sum) + '</span></span>' +
+          '<span class="dd-track"><span class="dd-fill" style="width:' + w.toFixed(1) + '%;background:' + rc.fill + ';border:1px solid ' + rc.line + '"></span></span>' +
+        '</summary>' +
+        (rozHtml ? '<div class="dd-roz-list">' + rozHtml + '</div>' : '<div class="dd-roz-list"><p class="dd-empty">Brak rozdziałów w danych.</p></div>') +
+        '</details>';
+    }).join("");
+
+    host.innerHTML =
+      '<button class="dd-back" id="dd-back"><i class="ti ti-arrow-left" aria-hidden="true"></i> Wszystkie działy</button>' +
+      '<div class="dd-header" style="border-left:4px solid ' + col.line + '">' +
+        '<p class="dd-eyebrow">Dział ' + escapeHtml(code) + ' · budżet ' + (DATA.meta.rok || YEAR) + '</p>' +
+        '<h2 class="dd-title">' + escapeHtml(dz.name) + '</h2>' +
+        '<p class="dd-amount">' + money(dz.plan) + ' <span class="dd-share">' + share + '% budżetu</span></p>' +
+      '</div>' +
+      '<h3 class="dd-h">Kto to wydaje</h3>' +
+      '<p class="dd-sub">Części (dysponenci) wnoszące wydatki do tego działu. Rozwiń, by zobaczyć rozdziały.</p>' +
+      '<div class="dd-parts">' + parts + '</div>' +
+      '<p class="hint"><i class="ti ti-info-circle" aria-hidden="true"></i> Suma rozbicia wg części (' + money(agg.aggTotal) +
+        ') może nieznacznie różnić się od kwoty zbiorczej działu (' + money(dz.plan) + ') — to różnice klasyfikacyjne w ustawie, nie błąd.</p>';
+
+    var back = document.getElementById("dd-back");
+    if (back) back.addEventListener("click", function () { closeDzial(true); });
+  }
+
+  function openDzial(code, push) {
+    if (!DATA || !dzialMeta(code)) return;
+    dzialDetail = code;
+    document.getElementById("treemap-wrap").style.display = "none";
+    document.getElementById("legend").style.display = "none";
+    var hint = document.getElementById("tree-hint"); if (hint) hint.style.display = "none";
+    document.getElementById("crumbs").style.display = "none";
+    document.getElementById("axis-toggle").style.display = "none";
+    var det = document.getElementById("dzial-detail");
+    drawDzialDetail(code);
+    det.hidden = false;
+    det.scrollIntoView ? window.scrollTo({ top: 0 }) : null;
+    if (push) history.pushState({ rok: DETAIL_YEAR, dzial: code }, "", "?rok=" + DETAIL_YEAR + "&dzial=" + code);
+  }
+
+  function closeDzial(push) {
+    if (dzialDetail == null) return;
+    dzialDetail = null;
+    var det = document.getElementById("dzial-detail"); if (det) det.hidden = true;
+    document.getElementById("treemap-wrap").style.display = "";
+    document.getElementById("legend").style.display = "";
+    var hint = document.getElementById("tree-hint"); if (hint) hint.style.display = "";
+    document.getElementById("crumbs").style.display = "";
+    // axis toggle only on tree view
+    document.getElementById("axis-toggle").style.display = (view === "tree") ? "inline-flex" : "none";
+    if (view === "tree") drawTree();
+    if (push) history.pushState({}, "", location.pathname);
+  }
+
+  // URL sync (back/forward + deep link)
+  function syncFromUrl() {
+    var p = new URLSearchParams(location.search);
+    var dz = p.get("dzial"), rok = parseInt(p.get("rok"), 10);
+    if (dz && rok === DETAIL_YEAR && view === "tree" && axis === "dzialy" && YEAR === DETAIL_YEAR && dzialMeta(dz)) {
+      openDzial(dz, false);
+    } else if (dzialDetail != null) {
+      closeDzial(false);
+    }
+  }
+  function initFromUrl() {
+    var p = new URLSearchParams(location.search);
+    var dz = p.get("dzial"), rok = parseInt(p.get("rok"), 10);
+    if (dz && rok === DETAIL_YEAR) {
+      setYear(DETAIL_YEAR, function () {
+        if (axis === "dzialy" && view === "tree" && dzialMeta(dz)) openDzial(dz, false);
+      });
+    }
+  }
+
   // ---------- tooltip ----------
   function showTip(ev, d, total) {
     var share = (d.value / total * 100).toFixed(1).replace(".", ",");
     tooltip.innerHTML = '<strong>' + escapeHtml(d.name) + '</strong><br>' +
       '<span class="tt-val">' + money(d.value) + '</span> · <span class="tt-share">' + share + '% poziomu</span>' +
-      (canDrill(d) ? '<br><span style="opacity:.7">kliknij, aby wejść głębiej</span>' : '');
+      (tileInteractive(d) ? '<br><span style="opacity:.7">kliknij, aby wejść głębiej</span>' : '');
     tooltip.style.opacity = "1";
     positionTip(ev);
   }
@@ -1314,6 +1435,7 @@
     });
   }
   function switchView(v) {
+    if (v !== "tree" && dzialDetail != null) closeDzial(true); // leaving the map closes the dział detail
     view = v;
     var map = { tree: ["tab-tree", "panel-tree"], flow: ["tab-flow", "panel-flow"], type: ["tab-type", "panel-type"], trends: ["tab-trends", "panel-trends"], taxes: ["tab-taxes", "panel-taxes"], exec: ["tab-exec", "panel-exec"] };
     Object.keys(map).forEach(function (k) {
@@ -1356,8 +1478,9 @@
     });
   }
 
-  function setYear(yr) {
-    if (yr === YEAR) return;
+  function setYear(yr, onDone) {
+    if (yr === YEAR) { if (onDone) onDone(); return; }
+    if (dzialDetail != null) closeDzial(true); // detail is year-specific (2025) — close on year change
     // reflect pressed state
     document.querySelectorAll("#year-seg button").forEach(function (b) {
       b.setAttribute("aria-pressed", parseInt(b.getAttribute("data-year"), 10) === yr ? "true" : "false");
@@ -1374,15 +1497,16 @@
       YEAR = yr;
       renderStats();
       // trends dashboard is year-independent — just move the year marker, no crossfade
-      if (view === "trends") { if (TRENDS) drawTrendCharts(); return; }
-      if (view === "taxes") { drawTaxes(); return; }
-      if (view === "exec") { drawExec(); return; }
+      if (view === "trends") { if (TRENDS) drawTrendCharts(); if (onDone) onDone(); return; }
+      if (view === "taxes") { drawTaxes(); if (onDone) onDone(); return; }
+      if (view === "exec") { drawExec(); if (onDone) onDone(); return; }
       // re-render whichever year-specific view is active, with a blurred crossfade
       crossfadeRedraw(function () {
         if (view === "tree") drawTree();
         else if (view === "flow") drawSankey();
         else if (view === "type") drawTypes();
       });
+      if (onDone) onDone();
     }
 
     if (YEAR_CACHE[yr]) { apply(YEAR_CACHE[yr]); return; }
@@ -1406,6 +1530,7 @@
   }
   function setAxis(a) {
     if (axis === a) return;
+    if (dzialDetail != null) closeDzial(true); // switching axis closes the dział detail
     axis = a;
     path = [];
     restExpanded = false;
@@ -1415,6 +1540,7 @@
   }
 
   function onResize() {
+    if (dzialDetail != null) return; // detail is a flowing DOM list — CSS handles reflow
     if (view === "tree") drawTree();
     else if (view === "flow") drawSankey();
     else if (view === "type") drawTypes();
