@@ -1,0 +1,5 @@
+# local-only dev docs (kept on disk, not published)
+CLAUDE.md
+PRD-Budzet-Polski*.docx
+gen-prd.js
+.DS_Store
