@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "cpi_opis": "Średnioroczny wskaźnik cen towarów i usług konsumpcyjnych, rok poprzedni = 100 (GUS).",
+    "ludnosc_opis": "Liczba ludności Polski, stan w dniu 31 grudnia (GUS).",
+    "bazowy_rok_realny": 2026,
+    "zrodla": {
+      "cpi": "GUS — Roczne wskaźniki cen towarów i usług konsumpcyjnych od 1950 r.; komunikat Prezesa GUS z 15.01.2026 (M.P. 2026 poz. 81) dla 2025 r.",
+      "cpi_2026": "Założenia makroekonomiczne do ustawy budżetowej na 2026 r. (Rada Ministrów / Ministerstwo Finansów): średnioroczna inflacja CPI 3,0% — PROGNOZA.",
+      "ludnosc": "GUS — Ludność. Stan i struktura ludności (stan w dniu 31 grudnia). Wartość dla 2026 r. to ostatni dostępny szacunek."
+    }
+  },
+  "lata": [
+    { "rok": 2011, "cpi": 104.3, "ludnosc": 38538447 },
+    { "rok": 2012, "cpi": 103.7, "ludnosc": 38533300 },
+    { "rok": 2013, "cpi": 100.9, "ludnosc": 38495700 },
+    { "rok": 2014, "cpi": 100.0, "ludnosc": 38478600 },
+    { "rok": 2015, "cpi": 99.1,  "ludnosc": 38437200 },
+    { "rok": 2016, "cpi": 99.4,  "ludnosc": 38433000 },
+    { "rok": 2017, "cpi": 102.0, "ludnosc": 38434000 },
+    { "rok": 2018, "cpi": 101.6, "ludnosc": 38411000 },
+    { "rok": 2019, "cpi": 102.3, "ludnosc": 38383000 },
+    { "rok": 2020, "cpi": 103.4, "ludnosc": 38268000 },
+    { "rok": 2021, "cpi": 105.1, "ludnosc": 37907000 },
+    { "rok": 2022, "cpi": 114.4, "ludnosc": 37766000 },
+    { "rok": 2023, "cpi": 111.4, "ludnosc": 37637000 },
+    { "rok": 2024, "cpi": 103.6, "ludnosc": 37489000 },
+    { "rok": 2025, "cpi": 103.6, "ludnosc": 37333000 },
+    { "rok": 2026, "cpi": 103.0, "ludnosc": 37333000, "prognoza": true }
+  ]
+}

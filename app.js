@@ -728,6 +728,7 @@
         var body = document.getElementById("trends-body");
         if (body) body.hidden = false;
         populateCatPicker();
+        populateMoversPickers();
         wireTrends();
         cb();
       })
@@ -778,6 +779,12 @@
     if (pct) pct.addEventListener("click", function () { setTrendsMode("pct"); });
     var sel = document.getElementById("trend-cat");
     if (sel) sel.addEventListener("change", function () { trendsCat = sel.value; drawTrendCategory(); });
+    var rc = document.getElementById("trend-real-curr"), rk = document.getElementById("trend-real-const");
+    if (rc) rc.addEventListener("click", function () { setTrendsReal(false); });
+    if (rk) rk.addEventListener("click", function () { setTrendsReal(true); });
+    var mf = document.getElementById("movers-from"), mt = document.getElementById("movers-to");
+    if (mf) mf.addEventListener("change", function () { moversFrom = parseInt(mf.value, 10); drawMovers(); });
+    if (mt) mt.addEventListener("change", function () { moversTo = parseInt(mt.value, 10); drawMovers(); });
   }
   function setTrendsMode(m) {
     if (trendsMode === m) return;
@@ -789,7 +796,7 @@
   }
 
   function drawTrends() { if (!TRENDS) return; drawTrendKPIs(); drawTrendCharts(); }
-  function drawTrendCharts() { if (!TRENDS) return; drawTrendTotals(); drawTrendTypes(); drawTrendCategory(); }
+  function drawTrendCharts() { if (!TRENDS) return; drawTrendTotals(); drawTrendTypes(); drawTrendCategory(); drawMovers(); }
 
   function buildLegendEl(id, items) {
     var el = document.getElementById(id);
@@ -806,8 +813,11 @@
     var maxDef = L.reduce(function (a, b) { return b.deficyt > a.deficyt ? b : a; });
     var balanced = L.filter(function (r) { return r.deficyt === 0; }).map(function (r) { return r.rok; });
     var cumDef = d3.sum(L, function (r) { return r.deficyt; });
+    var realFirst = deflate(first.wydatki, first.rok);
+    var realGrowth = CONTEXT ? (last.wydatki / realFirst - 1) * 100 : null;
+    var growthFoot = first.rok + " → " + last.rok + (realGrowth != null ? " · realnie +" + Math.round(realGrowth) + "%" : "");
     var cards = [
-      { label: "Wzrost wydatków", to: growth, fmt: statPctFmt(0), foot: first.rok + " → " + last.rok },
+      { label: "Wzrost wydatków", to: growth, fmt: statPctFmt(0), foot: growthFoot },
       { label: "Największy deficyt", to: maxDef.deficyt, fmt: statMoneyFmt(maxDef.deficyt), foot: "Rok " + maxDef.rok, danger: true },
       { label: "Budżet zbilansowany", to: balanced.length ? balanced[0] : 0, fmt: function () { return { num: balanced.length ? String(balanced[0]) : "b.d.", unit: "" }; }, foot: balanced.length ? "Deficyt = 0" : "Brak", noAnim: true },
       { label: "Suma deficytów", to: cumDef, fmt: statMoneyFmt(cumDef), foot: first.rok + "–" + last.rok }
@@ -922,7 +932,7 @@
   // ---- module 2: totals (wydatki / dochody / deficyt) ----
   function drawTrendTotals() {
     var L = TRENDS.lata;
-    function vals(f) { return L.map(function (r) { return { x: r.rok, y: r[f] }; }); }
+    function vals(f) { return L.map(function (r) { return { x: r.rok, y: realVal(r[f], r.rok) }; }); }
     var series = [
       { name: "Wydatki", color: cssVar("var(--accent)"), values: vals("wydatki") },
       { name: "Dochody", color: cssVar("var(--c-transfer-line)"), values: vals("dochody") },
@@ -940,6 +950,7 @@
       var d = r.dzialy.filter(function (x) { return x.name === trendsCat; })[0];
       var v = d ? d.plan : null;
       if (pctMode && v != null) v = v / r.wydatki * 100;
+      else if (v != null) v = realVal(v, r.rok);
       return { x: r.rok, y: v };
     });
     var color = cssVar(CMAP[colorKey(trendsCat)].line);
@@ -965,7 +976,7 @@
     var typeNames = L[L.length - 1].typy.slice().sort(function (a, b) { return b.plan - a.plan; }).map(function (t) { return t.name; });
 
     var x = d3.scaleBand().domain(years.map(String)).range([0, iw]).padding(narrow ? 0.16 : 0.32);
-    var maxTotal = pctMode ? 100 : d3.max(L, function (r) { return d3.sum(r.typy, function (t) { return t.plan; }); });
+    var maxTotal = pctMode ? 100 : d3.max(L, function (r) { return d3.sum(r.typy, function (t) { return realVal(t.plan, r.rok); }); });
     var y = d3.scaleLinear().domain([0, maxTotal]).nice().range([ih, 0]);
 
     var svg = d3.select(svgEl).attr("viewBox", "0 0 " + W + " " + H).attr("width", "100%").attr("height", H);
@@ -992,7 +1003,7 @@
       typeNames.forEach(function (tn) {
         var t = r.typy.filter(function (z) { return z.name === tn; })[0];
         var val = t ? t.plan : 0;
-        var disp = pctMode ? (total ? val / total * 100 : 0) : val;
+        var disp = pctMode ? (total ? val / total * 100 : 0) : realVal(val, r.rok);
         var y0 = cum, y1 = cum + disp; cum = y1;
         var ry = y(y1), rh = Math.max(0, y(y0) - y(y1));
         var rect = g.append("rect").attr("class", "tseg")
@@ -1016,16 +1027,151 @@
     }));
   }
 
+  // ================= CONTEXT (CPI + ludność z GUS) =================
+  var CONTEXT = null;
+  var PRICE = {};               // rok -> poziom cen (baza 2011 = 100)
+  var REAL_BASE = 2026;         // ceny stałe wyrażone w cenach tego roku
+  var trendsReal = false;       // false = ceny bieżące, true = ceny stałe
+
+  function loadContext(cb) {
+    if (CONTEXT) { cb(); return; }
+    fetch("context-data.json")
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (json) { CONTEXT = json; buildPriceLevels(); cb(); })
+      .catch(function (err) { console.error(err); cb(); }); // degraduj: funkcje działają nominalnie
+  }
+  function buildPriceLevels() {
+    PRICE = {}; var lvl = 100;
+    CONTEXT.lata.forEach(function (r, i) { lvl = (i === 0) ? 100 : lvl * (r.cpi / 100); PRICE[r.rok] = lvl; });
+    var base = CONTEXT.lata[CONTEXT.lata.length - 1].rok;
+    if (PRICE[REAL_BASE] == null) REAL_BASE = base;
+  }
+  function popOf(year) { var r = (CONTEXT ? CONTEXT.lata : []).filter(function (x) { return x.rok === year; })[0]; return r ? r.ludnosc : null; }
+  function deflate(val, year) {
+    if (!CONTEXT || PRICE[year] == null || PRICE[REAL_BASE] == null) return val;
+    return val * (PRICE[REAL_BASE] / PRICE[year]);
+  }
+  function realVal(val, year) { return (trendsReal && val != null) ? deflate(val, year) : val; }
+  function zlFull(zl) { return fmtPL.format(Math.round(zl)) + " zł"; }
+
+  // ================= NAJWIĘKSZE ZMIANY =================
+  var moversFrom = null, moversTo = null;
+  function yearRecT(y) { return TRENDS.lata.filter(function (r) { return r.rok === y; })[0]; }
+  function populateMoversPickers() {
+    var years = trendYears();
+    if (moversFrom == null) moversFrom = years[0];
+    if (moversTo == null) moversTo = years[years.length - 1];
+    [["movers-from", moversFrom], ["movers-to", moversTo]].forEach(function (p) {
+      var sel = document.getElementById(p[0]); if (!sel) return;
+      sel.innerHTML = years.map(function (y) { return '<option value="' + y + '"' + (y === p[1] ? " selected" : "") + '>' + y + "</option>"; }).join("");
+    });
+  }
+  function drawMovers() {
+    if (!TRENDS) return;
+    var host = document.getElementById("movers"); if (!host) return;
+    var a = yearRecT(moversFrom), b = yearRecT(moversTo);
+    if (!a || !b) { host.innerHTML = ""; return; }
+    function mapOf(rec) { var m = {}; rec.dzialy.forEach(function (d) { m[d.name] = realVal(d.plan, rec.rok); }); return m; }
+    var ma = mapOf(a), mb = mapOf(b), names = {};
+    Object.keys(ma).forEach(function (n) { names[n] = 1; }); Object.keys(mb).forEach(function (n) { names[n] = 1; });
+    var rows = Object.keys(names).map(function (n) {
+      var va = ma[n] || 0, vb = mb[n] || 0;
+      // suppress % when a dział is absent in one year (rename/reclassification, not a real 0→x / x→0 change)
+      return { name: n, delta: vb - va, pct: (va > 0 && vb > 0) ? (vb / va - 1) * 100 : null };
+    }).filter(function (r) { return Math.abs(r.delta) > 0; });
+    var gain = rows.filter(function (r) { return r.delta > 0; }).sort(function (x, y) { return y.delta - x.delta; }).slice(0, 6);
+    var loss = rows.filter(function (r) { return r.delta < 0; }).sort(function (x, y) { return x.delta - y.delta; }).slice(0, 6);
+    var maxAbs = d3.max(rows, function (r) { return Math.abs(r.delta); }) || 1;
+    function listHtml(title, arr, up) {
+      return '<div class="movers-col"><h4 class="movers-h ' + (up ? "is-up" : "is-down") + '">' + title + "</h4>" +
+        (arr.length ? arr.map(function (r) {
+          var w = Math.max(3, Math.abs(r.delta) / maxAbs * 100);
+          var sign = r.delta >= 0 ? "+" : "−";
+          var pct = r.pct == null ? "" : ' <span class="mv-pct">' + sign + Math.abs(r.pct).toFixed(0) + "%</span>";
+          var c = CMAP[colorKey(r.name)];
+          return '<div class="mv-row"><span class="mv-name">' + escapeHtml(r.name) + "</span>" +
+            '<span class="mv-track"><span class="mv-fill" style="width:' + w.toFixed(1) + "%;background:" + c.fill + ";border:1px solid " + c.line + '"></span></span>' +
+            '<span class="mv-amt">' + sign + money(Math.abs(r.delta)) + pct + "</span></div>";
+        }).join("") : '<p class="mv-empty">Brak</p>') + "</div>";
+    }
+    host.innerHTML = listHtml("Najbardziej wzrosły", gain, true) + listHtml("Najbardziej spadły", loss, false);
+  }
+
+  function setTrendsReal(real) {
+    if (trendsReal === real) return;
+    trendsReal = real;
+    document.getElementById("trend-real-curr").setAttribute("aria-pressed", real ? "false" : "true");
+    document.getElementById("trend-real-const").setAttribute("aria-pressed", real ? "true" : "false");
+    drawTrendKPIs(); drawTrendTotals(); drawTrendTypes(); drawTrendCategory(); drawMovers();
+  }
+
+  // ================= TWOJE PODATKI =================
+  var taxAmount = 10000, taxesWired = false;
+  function wireTaxes() {
+    if (taxesWired) return; taxesWired = true;
+    var inp = document.getElementById("tax-input");
+    if (inp) inp.addEventListener("input", function () {
+      var v = parseFloat(inp.value); taxAmount = (isFinite(v) && v >= 0) ? v : 0; drawTaxSplit();
+    });
+  }
+  function drawTaxes() {
+    if (!DATA) return;
+    var st = document.getElementById("taxes-state"), body = document.getElementById("taxes-body");
+    if (st) st.style.display = "none";
+    if (body) body.hidden = false;
+    drawTaxKPIs(); drawTax1000(); drawTaxSplit();
+  }
+  function drawTaxKPIs() {
+    var m = DATA.meta, pop = popOf(YEAR);
+    var cards = [
+      { label: "Wydatki na obywatela", to: pop ? m.wydatki / pop : 0, fmt: statMoneyFmt(pop ? m.wydatki / pop : 0), foot: "Rok " + (m.rok || YEAR), danger: false, na: !pop },
+      { label: "Dochody na obywatela", to: pop ? m.dochody / pop : 0, fmt: statMoneyFmt(pop ? m.dochody / pop : 0), foot: "Wpływy ÷ ludność", danger: false, na: !pop },
+      { label: "Deficyt na obywatela", to: pop ? m.deficyt / pop : 0, fmt: statMoneyFmt(pop ? m.deficyt / pop : 0), foot: "Dług na osobę", danger: true, na: !pop },
+      { label: "Dziennie na obywatela", to: pop ? m.wydatki / pop / 365 : 0, fmt: statMoneyFmt(pop ? m.wydatki / pop / 365 : 0), foot: "Wydatki ÷ 365", danger: false, na: !pop }
+    ];
+    var host = document.getElementById("tax-kpis"); if (!host) return;
+    host.innerHTML = cards.map(function (c, i) {
+      return '<div class="stat anim-in" style="--anim-delay:' + (i * 50) + 'ms"><p class="stat-label">' + c.label + '</p>' +
+        '<p class="stat-value' + (c.danger ? " is-danger" : "") + '" data-xk="' + i + '"></p><p class="stat-foot">' + c.foot + "</p></div>";
+    }).join("");
+    cards.forEach(function (c, i) {
+      var el = host.querySelector('.stat-value[data-xk="' + i + '"]');
+      if (c.na) { el.textContent = "—"; return; }
+      var key = "__xk" + i, from = prevStatVals[key]; if (from == null) from = 0;
+      tweenValue(from, c.to, 900, function (v) { var r = c.fmt(v); el.innerHTML = r.num + (r.unit ? '<span class="unit">' + r.unit + "</span>" : ""); });
+      prevStatVals[key] = c.to;
+    });
+  }
+  // shared bar list for the two tax modules
+  function taxBarList(hostId, perShare, fmtAmt) {
+    var host = document.getElementById(hostId); if (!host) return;
+    var dz = DATA.dzialy.slice().sort(function (a, b) { return b.plan - a.plan; });
+    var total = d3.sum(dz, function (d) { return d.plan; }) || 1;
+    var TOPN = 12, top = dz.slice(0, TOPN), restSum = d3.sum(dz.slice(TOPN), function (d) { return d.plan; });
+    var rows = top.map(function (d) { return { name: d.name, share: d.plan / total }; });
+    if (restSum > 0) rows.push({ name: "Pozostałe działy", share: restSum / total });
+    var maxShare = rows.length ? rows[0].share : 1;
+    host.innerHTML = rows.map(function (r) {
+      var w = Math.max(2, r.share / maxShare * 100);
+      var c = CMAP[colorKey(r.name)];
+      return '<div class="taxbar"><span class="taxbar-name">' + escapeHtml(r.name) + "</span>" +
+        '<span class="taxbar-track"><span class="taxbar-fill grow-in" style="width:' + w.toFixed(1) + "%;background:" + c.fill + ";border:1px solid " + c.line + '"></span></span>' +
+        '<span class="taxbar-amt">' + fmtAmt(perShare(r.share)) + "</span></div>";
+    }).join("");
+  }
+  function drawTax1000() { taxBarList("tax-1000", function (s) { return s * 1000; }, function (v) { return Math.round(v) + " zł"; }); }
+  function drawTaxSplit() { taxBarList("tax-split", function (s) { return s * taxAmount; }, function (v) { return zlFull(v); }); }
+
   // ---------- tabs & axis ----------
   function wireTabs() {
-    var tabs = [["tab-tree", "panel-tree", "tree"], ["tab-flow", "panel-flow", "flow"], ["tab-type", "panel-type", "type"], ["tab-trends", "panel-trends", "trends"]];
+    var tabs = [["tab-tree", "panel-tree", "tree"], ["tab-flow", "panel-flow", "flow"], ["tab-type", "panel-type", "type"], ["tab-trends", "panel-trends", "trends"], ["tab-taxes", "panel-taxes", "taxes"]];
     tabs.forEach(function (t) {
       document.getElementById(t[0]).addEventListener("click", function () { switchView(t[2]); });
     });
   }
   function switchView(v) {
     view = v;
-    var map = { tree: ["tab-tree", "panel-tree"], flow: ["tab-flow", "panel-flow"], type: ["tab-type", "panel-type"], trends: ["tab-trends", "panel-trends"] };
+    var map = { tree: ["tab-tree", "panel-tree"], flow: ["tab-flow", "panel-flow"], type: ["tab-type", "panel-type"], trends: ["tab-trends", "panel-trends"], taxes: ["tab-taxes", "panel-taxes"] };
     Object.keys(map).forEach(function (k) {
       var isSel = k === v;
       document.getElementById(map[k][0]).setAttribute("aria-selected", isSel ? "true" : "false");
@@ -1048,7 +1194,8 @@
     if (v === "tree") drawTree();
     if (v === "flow") drawSankey();
     if (v === "type") drawTypes();
-    if (v === "trends") loadTrends(drawTrends);
+    if (v === "trends") loadTrends(function () { loadContext(drawTrends); });
+    if (v === "taxes") loadContext(function () { wireTaxes(); drawTaxes(); });
   }
 
   function wireAxis() {
@@ -1079,6 +1226,7 @@
       renderStats();
       // trends dashboard is year-independent — just move the year marker, no crossfade
       if (view === "trends") { if (TRENDS) drawTrendCharts(); return; }
+      if (view === "taxes") { drawTaxes(); return; }
       // re-render whichever year-specific view is active, with a blurred crossfade
       crossfadeRedraw(function () {
         if (view === "tree") drawTree();
@@ -1121,6 +1269,7 @@
     else if (view === "flow") drawSankey();
     else if (view === "type") drawTypes();
     else if (view === "trends" && TRENDS) drawTrendCharts();
+    else if (view === "taxes" && DATA) drawTaxes();
   }
 
   // redraw active view immediately when crossing the mobile/desktop breakpoint

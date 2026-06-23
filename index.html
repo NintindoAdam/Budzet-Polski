@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.7.0/dist/tabler-icons.min.css">
-<link rel="stylesheet" href="style.css?v=16">
+<link rel="stylesheet" href="style.css?v=17">
 </head>
 <body>
 
@@ -83,6 +83,9 @@
         <button class="tab" role="tab" id="tab-trends" aria-selected="false" aria-controls="panel-trends">
           <i class="ti ti-trending-up" aria-hidden="true"></i> Trendy
         </button>
+        <button class="tab" role="tab" id="tab-taxes" aria-selected="false" aria-controls="panel-taxes">
+          <i class="ti ti-user-dollar" aria-hidden="true"></i> Twoje podatki
+        </button>
       </div>
 
       <div class="control-right">
@@ -130,6 +133,21 @@
       <div class="state" id="trends-state"><div class="spinner"></div>Wczytuję dane historyczne…</div>
 
       <div id="trends-body" hidden>
+        <div class="trend-toolbar">
+          <span class="trend-toggle" id="trend-toggle" role="group" aria-label="Tryb wartości">
+            <span class="seg">
+              <button id="trend-zl" aria-pressed="true">kwoty (zł)</button>
+              <button id="trend-pct" aria-pressed="false">udział (%)</button>
+            </span>
+          </span>
+          <span class="trend-toggle" id="real-toggle" role="group" aria-label="Ceny">
+            <span class="seg">
+              <button id="trend-real-curr" aria-pressed="true">ceny bieżące</button>
+              <button id="trend-real-const" aria-pressed="false">ceny stałe (2026)</button>
+            </span>
+          </span>
+        </div>
+
         <div class="stats trend-kpis" id="trend-kpis" aria-label="Kluczowe wskaźniki w czasie"></div>
 
         <!-- big three -->
@@ -141,15 +159,7 @@
 
         <!-- type composition -->
         <section class="trend-section">
-          <div class="trend-section-head">
-            <h3 class="trend-h">Struktura wydatków wg rodzaju</h3>
-            <span class="trend-toggle" id="trend-toggle" role="group" aria-label="Tryb wartości">
-              <span class="seg">
-                <button id="trend-zl" aria-pressed="true">kwoty (zł)</button>
-                <button id="trend-pct" aria-pressed="false">udział (%)</button>
-              </span>
-            </span>
-          </div>
+          <h3 class="trend-h">Struktura wydatków wg rodzaju</h3>
           <div class="trend-legend" id="legend-types"></div>
           <div class="chart-wrap"><svg id="chart-types" role="img" aria-label="Struktura wydatków wg rodzaju w czasie"></svg></div>
         </section>
@@ -165,7 +175,47 @@
           <div class="chart-wrap"><svg id="chart-cat" role="img" aria-label="Wydatki wybranego działu w czasie"></svg></div>
         </section>
 
-        <p class="hint"><i class="ti ti-info-circle" aria-hidden="true"></i> Pionowa linia oznacza rok wybrany powyżej. Przełącznik zł/% dotyczy struktury rodzajów i działów.</p>
+        <!-- biggest movers -->
+        <section class="trend-section">
+          <div class="trend-section-head">
+            <h3 class="trend-h">Największe zmiany</h3>
+            <span class="movers-pick">od
+              <select id="movers-from" aria-label="Rok początkowy"></select> do
+              <select id="movers-to" aria-label="Rok końcowy"></select>
+            </span>
+          </div>
+          <div class="movers" id="movers"></div>
+        </section>
+
+        <p class="hint"><i class="ti ti-info-circle" aria-hidden="true"></i> Pionowa linia oznacza rok wybrany w pasku lat. „Ceny stałe" przeliczają dawne kwoty na siłę nabywczą z 2026 r. (CPI wg GUS; inflacja 2026 to prognoza rządowa). Część działów zmieniała przez lata nazwę lub klasyfikację, co w „największych zmianach" może wyglądać jak nagły wzrost albo spadek.</p>
+      </div>
+    </div>
+
+    <!-- TWOJE PODATKI -->
+    <div class="panel" id="panel-taxes" role="tabpanel" aria-labelledby="tab-taxes" hidden>
+      <p style="color:var(--ink-soft); max-width:64ch; margin:0 0 16px;">Miliardy trudno sobie wyobrazić. Zobacz, ile budżet znaczy w przeliczeniu na jednego obywatela i na każde wydane 1000 zł. Dane dla roku wybranego w pasku powyżej.</p>
+
+      <div class="state" id="taxes-state"><div class="spinner"></div>Wczytuję dane…</div>
+
+      <div id="taxes-body" hidden>
+        <div class="stats trend-kpis" id="tax-kpis" aria-label="Budżet na obywatela"></div>
+
+        <section class="trend-section">
+          <h3 class="trend-h">Z każdych 1000 zł budżetu</h3>
+          <div class="bars" id="tax-1000"></div>
+        </section>
+
+        <section class="trend-section">
+          <div class="trend-section-head">
+            <h3 class="trend-h">Gdyby to był Twój podatek</h3>
+            <label class="cat-pick">Twoja kwota (zł / rok):
+              <input id="tax-input" type="number" inputmode="numeric" min="0" step="100" value="10000" aria-label="Twoja roczna kwota w złotych">
+            </label>
+          </div>
+          <div class="bars" id="tax-split"></div>
+        </section>
+
+        <p class="hint"><i class="ti ti-info-circle" aria-hidden="true"></i> Podział wg struktury wydatków budżetu (działy). „Na obywatela" = wydatki ÷ liczba ludności (GUS). To ilustracja proporcji, nie rzeczywista alokacja Twoich podatków.</p>
       </div>
     </div>
   </section>
@@ -182,6 +232,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
-<script src="app.js?v=14"></script>
+<script src="app.js?v=17"></script>
 </body>
 </html>

@@ -317,6 +317,53 @@ button.mbar:active { border-color: var(--line-strong); background: var(--bg); tr
   .cat-pick select { max-width: none; width: 100%; min-width: 0; flex: 1 1 auto; }
 }
 
+/* ---------- Trends toolbar (zł/% + ceny bieżące/stałe) ---------- */
+.trend-toolbar { display: flex; flex-wrap: wrap; gap: 10px 14px; margin: 0 0 26px; }
+
+/* ---------- Movers + tax bar lists (shared compact bar rows) ---------- */
+.movers-pick { font-size: 13px; color: var(--ink-soft); display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.movers-pick select {
+  font: inherit; font-size: 13px; color: var(--ink); background-color: var(--surface);
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm); padding: 6px 28px 6px 10px;
+  cursor: pointer; appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238C857B' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat; background-position: right 8px center;
+}
+.cat-pick input[type="number"] {
+  font: inherit; font-size: 13px; width: 130px; padding: 7px 11px; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  font-variant-numeric: tabular-nums; transition: border-color var(--dur-ui) var(--ease-out);
+}
+.cat-pick input[type="number"]:focus { outline: none; border-color: var(--accent); }
+
+.movers { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 30px; }
+.movers-h { font-size: 13px; font-weight: 600; letter-spacing: 0.01em; margin: 0 0 8px; }
+.movers-h.is-up { color: var(--c-edu-ink); }
+.movers-h.is-down { color: var(--danger); }
+.mv-empty { color: var(--ink-faint); font-size: 13px; margin: 0; }
+
+.taxbar, .mv-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; align-items: center;
+  gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line);
+}
+.taxbar:last-child, .mv-row:last-child { border-bottom: 0; }
+.taxbar-name, .mv-name { font-size: 13px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.taxbar-track, .mv-track { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.taxbar-fill, .mv-fill { display: block; height: 100%; border-radius: 4px; transform-origin: left center; }
+.taxbar-amt, .mv-amt { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.mv-pct { color: var(--ink-faint); font-weight: 400; }
+
+@media (max-width: 760px) {
+  .movers { grid-template-columns: 1fr; gap: 18px; }
+  .taxbar, .mv-row {
+    grid-template-columns: 1fr auto; grid-template-areas: "name amt" "track track"; gap: 4px 10px;
+  }
+  .taxbar-name, .mv-name { grid-area: name; }
+  .taxbar-amt, .mv-amt { grid-area: amt; }
+  .taxbar-track, .mv-track { grid-area: track; }
+  .cat-pick input[type="number"] { width: 100%; flex: 1 1 auto; }
+}
+
 /* ---------- Footer ---------- */
 .foot { border-top: 1px solid var(--line); margin-top: 64px; padding: 28px 0 56px; }
 .foot .wrap { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
