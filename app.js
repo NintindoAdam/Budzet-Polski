@@ -86,6 +86,7 @@
       wireTabs();
       wireAxis();
       wireYear();
+      updateExecTab(); // hide the Plan vs wykonanie tab unless the current year has data
       window.addEventListener("resize", debounce(onResize, 150));
       // release the staggered first-load entrance after the first paint
       requestAnimationFrame(function () {
@@ -1165,6 +1166,11 @@
   // ================= PLAN VS WYKONANIE (test — na razie tylko 2025) =================
   var WYK_FILES = { 2025: "wykonanie-2025.json" };
   var WYK_CACHE = {};
+  // the "Plan vs wykonanie" tab only exists for years that have execution data
+  function updateExecTab() {
+    var btn = document.getElementById("tab-exec");
+    if (btn) btn.style.display = WYK_FILES[YEAR] ? "" : "none";
+  }
   function loadExec(cb) {
     var file = WYK_FILES[YEAR];
     if (!file) { cb(null); return; }
@@ -1278,6 +1284,10 @@
     document.querySelectorAll("#year-seg button").forEach(function (b) {
       b.setAttribute("aria-pressed", parseInt(b.getAttribute("data-year"), 10) === yr ? "true" : "false");
     });
+    // show/hide the Plan vs wykonanie tab for the new year; leave it if it vanishes
+    var execBtn = document.getElementById("tab-exec");
+    if (execBtn) execBtn.style.display = WYK_FILES[yr] ? "" : "none";
+    if (view === "exec" && !WYK_FILES[yr]) switchView("tree");
     path = [];
     restExpanded = false;
 
