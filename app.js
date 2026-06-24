@@ -1297,7 +1297,7 @@
   function drawTaxSplit() { taxBarList("tax-split", function (s) { return s * taxAmount; }, function (v) { return zlFull(v); }); }
 
   // ================= PLAN VS WYKONANIE (test — na razie tylko 2025) =================
-  var WYK_FILES = { 2025: "wykonanie-2025.json", 2024: "wykonanie-2024.json", 2023: "wykonanie-2023.json", 2022: "wykonanie-2022.json" };
+  var WYK_FILES = { 2025: "wykonanie-2025.json", 2024: "wykonanie-2024.json", 2023: "wykonanie-2023.json", 2022: "wykonanie-2022.json", 2021: "wykonanie-2021.json", 2020: "wykonanie-2020.json", 2019: "wykonanie-2019.json" };
   var WYK_CACHE = {};
   // the "Plan vs wykonanie" tab only exists for years that have execution data
   function updateExecTab() {
@@ -1325,7 +1325,7 @@
     });
   }
   // deviation helpers
-  function execDev(plan, wyk) { return { diff: wyk - plan, pct: plan ? (wyk / plan - 1) * 100 : 0 }; }
+  function execDev(plan, wyk) { return { diff: wyk - plan, pct: plan ? (wyk / plan - 1) * 100 : null }; }
   function absPct(p) { return Math.abs(p).toFixed(1).replace(".", ","); }
   function signMoney(diff) { return (diff >= 0 ? "+" : "−") + money(Math.abs(diff)); }
   function drawExecSummary(W) {
@@ -1333,9 +1333,11 @@
     var m = DATA.meta, w = W.wykonanie;
     var dd = execDev(m.dochody, w.dochody), dw = execDev(m.wydatki, w.wydatki), df = execDev(m.deficyt, w.deficyt);
     function mw(p) { return p < 0 ? "mniej" : "więcej"; }
+    var defClause = (df.pct == null)
+      ? "W efekcie pojawił się deficyt " + money(w.deficyt) + ", choć ustawa zakładała budżet zrównoważony (plan 0)."
+      : "W efekcie deficyt był o " + money(Math.abs(df.diff)) + " (" + absPct(df.pct) + "%) <strong>" + (df.diff < 0 ? "niższy" : "wyższy") + "</strong> od planu.";
     el.innerHTML = "W " + (m.rok || YEAR) + " r. do budżetu wpłynęło o <strong>" + absPct(dd.pct) + "% " + mw(dd.pct) + "</strong>, niż zaplanowano (" + signMoney(dd.diff) +
-      "), a wydano o <strong>" + absPct(dw.pct) + "% " + mw(dw.pct) + "</strong> (" + signMoney(dw.diff) + "). " +
-      "W efekcie deficyt był o " + money(Math.abs(df.diff)) + " (" + absPct(df.pct) + "%) <strong>" + (df.diff < 0 ? "niższy" : "wyższy") + "</strong> od planu.";
+      "), a wydano o <strong>" + absPct(dw.pct) + "% " + mw(dw.pct) + "</strong> (" + signMoney(dw.diff) + "). " + defClause;
   }
   function drawExecKPIs(W) {
     var m = DATA.meta;
@@ -1349,7 +1351,7 @@
       var dv = execDev(c.plan, c.wyk);
       // deficyt lower than plan = good news → green; revenue/spend deviations stay neutral
       var dCls = (c.label === "Deficyt") ? (dv.diff < 0 ? " is-good" : " is-bad") : "";
-      var delta = signMoney(dv.diff) + " · " + (dv.pct >= 0 ? "+" : "−") + absPct(dv.pct) + "% vs plan";
+      var delta = signMoney(dv.diff) + " · " + (dv.pct == null ? "—" : (dv.pct >= 0 ? "+" : "−") + absPct(dv.pct) + "%") + " vs plan";
       return '<div class="stat anim-in" style="--anim-delay:' + (i * 50) + 'ms"><p class="stat-label">' + c.label + ' (wykonanie)</p>' +
         '<p class="stat-value' + (c.danger ? " is-danger" : "") + '" data-ek="' + i + '"></p>' +
         '<p class="stat-foot">plan ' + money(c.plan) + '</p>' +
