@@ -11,8 +11,7 @@
   var axis = "dzialy";        // "dzialy" | "czesci"
   var view = "tree";          // "tree" | "flow" | "type"
   var path = [];              // drill-down stack of node objects
-  var dzialDetail = null;     // beta: open dział detail (code) or null — only YEAR 2025
-  var DETAIL_YEAR = 2025;     // years that support the dział detail view
+  var dzialDetail = null;     // open dział detail (code) or null — available on all years
 
   var fmtPL = new Intl.NumberFormat("pl-PL");
   var tooltip = document.getElementById("tooltip");
@@ -412,8 +411,8 @@
     // drilling available only on części axis (część -> dział -> rozdział)
     return axis === "czesci" && d.hasChildren;
   }
-  // beta: in działy mode on a supported year, a tile opens the dział detail view
-  function canOpenDetail() { return axis === "dzialy" && YEAR === DETAIL_YEAR; }
+  // in działy mode, a tile opens the dział detail view (all years; needs the części axis data)
+  function canOpenDetail() { return axis === "dzialy" && !!(DATA && DATA.czesci && DATA.czesci.length); }
   function tileInteractive(d) { return canDrill(d) || canOpenDetail(); }
 
   function onTileClick(d) {
@@ -448,7 +447,7 @@
     });
   }
 
-  // ================= DZIAŁ DETAIL (beta, 2025) =================
+  // ================= DZIAŁ DETAIL (all years) =================
   // aggregate which części fund a given dział (by code), with their rozdziały
   function aggregatePartsForDzial(code) {
     var rows = [];
@@ -541,7 +540,8 @@
     drawDzialDetail(code);
     det.hidden = false;
     window.scrollTo({ top: 0 });
-    if (push) history.pushState({ rok: DETAIL_YEAR, dzial: code }, "", "?rok=" + DETAIL_YEAR + "&dzial=" + code);
+    var rok = (DATA.meta && DATA.meta.rok) || YEAR;
+    if (push) history.pushState({ rok: rok, dzial: code }, "", "?rok=" + rok + "&dzial=" + code);
   }
 
   function closeDzial(push) {
@@ -557,7 +557,7 @@
   function syncFromUrl() {
     var p = new URLSearchParams(location.search);
     var dz = p.get("dzial"), rok = parseInt(p.get("rok"), 10);
-    if (dz && rok === DETAIL_YEAR && view === "tree" && axis === "dzialy" && YEAR === DETAIL_YEAR && dzialMeta(dz)) {
+    if (dz && rok === YEAR && view === "tree" && axis === "dzialy" && dzialMeta(dz)) {
       openDzial(dz, false);
     } else if (dzialDetail != null) {
       closeDzial(false);
@@ -566,8 +566,8 @@
   function initFromUrl() {
     var p = new URLSearchParams(location.search);
     var dz = p.get("dzial"), rok = parseInt(p.get("rok"), 10);
-    if (dz && rok === DETAIL_YEAR) {
-      setYear(DETAIL_YEAR, function () {
+    if (dz && rok && YEAR_FILES[rok]) {
+      setYear(rok, function () {
         if (axis === "dzialy" && view === "tree" && dzialMeta(dz)) openDzial(dz, false);
       });
     }
@@ -1492,7 +1492,6 @@
 
   function setYear(yr, onDone) {
     if (yr === YEAR) { if (onDone) onDone(); return; }
-    if (dzialDetail != null) closeDzial(true); // detail is year-specific (2025) — close on year change
     // reflect pressed state
     document.querySelectorAll("#year-seg button").forEach(function (b) {
       b.setAttribute("aria-pressed", parseInt(b.getAttribute("data-year"), 10) === yr ? "true" : "false");
@@ -1508,6 +1507,17 @@
       DATA = json;
       YEAR = yr;
       renderStats();
+      // dział detail stays open across a year change — re-render it for the new year's data,
+      // or close it if this dział doesn't exist in the new year's classification
+      if (dzialDetail != null) {
+        if (dzialMeta(dzialDetail)) {
+          drawDzialDetail(dzialDetail);
+          history.replaceState({ rok: yr, dzial: dzialDetail }, "", "?rok=" + yr + "&dzial=" + dzialDetail);
+          if (onDone) onDone();
+          return;
+        }
+        closeDzial(true);
+      }
       // trends dashboard is year-independent — just move the year marker, no crossfade
       if (view === "trends") { if (TRENDS) drawTrendCharts(); if (onDone) onDone(); return; }
       if (view === "taxes") { drawTaxes(); if (onDone) onDone(); return; }
