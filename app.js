@@ -1297,7 +1297,7 @@
   function drawTaxSplit() { taxBarList("tax-split", function (s) { return s * taxAmount; }, function (v) { return zlFull(v); }); }
 
   // ================= PLAN VS WYKONANIE (test — na razie tylko 2025) =================
-  var WYK_FILES = { 2025: "wykonanie-2025.json", 2024: "wykonanie-2024.json", 2023: "wykonanie-2023.json" };
+  var WYK_FILES = { 2025: "wykonanie-2025.json", 2024: "wykonanie-2024.json", 2023: "wykonanie-2023.json", 2022: "wykonanie-2022.json" };
   var WYK_CACHE = {};
   // the "Plan vs wykonanie" tab only exists for years that have execution data
   function updateExecTab() {
