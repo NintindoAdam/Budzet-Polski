@@ -1297,7 +1297,7 @@
   function drawTaxSplit() { taxBarList("tax-split", function (s) { return s * taxAmount; }, function (v) { return zlFull(v); }); }
 
   // ================= PLAN VS WYKONANIE (test — na razie tylko 2025) =================
-  var WYK_FILES = { 2025: "wykonanie-2025.json", 2024: "wykonanie-2024.json", 2023: "wykonanie-2023.json", 2022: "wykonanie-2022.json", 2021: "wykonanie-2021.json", 2020: "wykonanie-2020.json", 2019: "wykonanie-2019.json", 2018: "wykonanie-2018.json", 2017: "wykonanie-2017.json", 2016: "wykonanie-2016.json", 2015: "wykonanie-2015.json", 2014: "wykonanie-2014.json", 2013: "wykonanie-2013.json" };
+  var WYK_FILES = { 2025: "wykonanie-2025.json", 2024: "wykonanie-2024.json", 2023: "wykonanie-2023.json", 2022: "wykonanie-2022.json", 2021: "wykonanie-2021.json", 2020: "wykonanie-2020.json", 2019: "wykonanie-2019.json", 2018: "wykonanie-2018.json", 2017: "wykonanie-2017.json", 2016: "wykonanie-2016.json", 2015: "wykonanie-2015.json", 2014: "wykonanie-2014.json", 2013: "wykonanie-2013.json", 2012: "wykonanie-2012.json" };
   var WYK_CACHE = {};
   // the "Plan vs wykonanie" tab only exists for years that have execution data
   function updateExecTab() {
